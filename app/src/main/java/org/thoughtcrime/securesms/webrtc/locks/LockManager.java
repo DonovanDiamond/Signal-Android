@@ -4,7 +4,8 @@ import android.content.Context;
 import android.net.wifi.WifiManager;
 import android.os.PowerManager;
 import android.provider.Settings;
-import org.thoughtcrime.securesms.logging.Log;
+
+import org.signal.core.util.logging.Log;
 
 /**
  * Maintains wake lock state.
@@ -13,7 +14,7 @@ import org.thoughtcrime.securesms.logging.Log;
  */
 public class LockManager {
 
-  private static final String TAG = LockManager.class.getSimpleName();
+  private static final String TAG = Log.tag(LockManager.class);
 
   private final PowerManager.WakeLock        fullLock;
   private final PowerManager.WakeLock        partialLock;

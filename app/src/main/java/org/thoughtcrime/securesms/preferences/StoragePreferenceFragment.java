@@ -8,7 +8,6 @@ import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
-import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -18,6 +17,7 @@ import androidx.preference.Preference;
 
 import com.annimon.stream.Stream;
 
+import org.signal.core.util.concurrent.SignalExecutors;
 import org.thoughtcrime.securesms.ApplicationPreferencesActivity;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.components.settings.BaseSettingsAdapter;
@@ -35,7 +35,6 @@ import org.thoughtcrime.securesms.permissions.Permissions;
 import org.thoughtcrime.securesms.preferences.widgets.StoragePreferenceCategory;
 import org.thoughtcrime.securesms.util.MappingModelList;
 import org.thoughtcrime.securesms.util.StringUtil;
-import org.thoughtcrime.securesms.util.concurrent.SignalExecutors;
 
 import java.text.NumberFormat;
 
@@ -138,7 +137,7 @@ public class StoragePreferenceFragment extends ListSummaryPreferenceFragment {
     public @NonNull MappingModelList getSettings() {
       KeepMessagesDuration currentDuration = SignalStore.settings().getKeepMessagesDuration();
       return Stream.of(KeepMessagesDuration.values())
-                   .map(duration -> new SingleSelectSetting.Item(duration, activity.getString(duration.getStringResource()), duration.equals(currentDuration)))
+                   .map(duration -> new SingleSelectSetting.Item(duration, activity.getString(duration.getStringResource()), null, duration.equals(currentDuration)))
                    .collect(MappingModelList.toMappingModelList());
     }
 
@@ -188,7 +187,7 @@ public class StoragePreferenceFragment extends ListSummaryPreferenceFragment {
         String  text       = option == 0 ? activity.getString(R.string.preferences_storage__none)
                                          : activity.getString(R.string.preferences_storage__s_messages, NumberFormat.getInstance().format(option));
 
-        settings.add(new SingleSelectSetting.Item(option, text, isSelected));
+        settings.add(new SingleSelectSetting.Item(option, text, null, isSelected));
 
         hasSelection = hasSelection || isSelected;
       }

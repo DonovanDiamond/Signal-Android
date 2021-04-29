@@ -8,6 +8,7 @@ import androidx.annotation.WorkerThread;
 
 import com.google.protobuf.ByteString;
 
+import org.signal.core.util.logging.Log;
 import org.signal.zkgroup.InvalidInputException;
 import org.signal.zkgroup.groups.GroupMasterKey;
 import org.thoughtcrime.securesms.R;
@@ -15,17 +16,16 @@ import org.thoughtcrime.securesms.database.DatabaseFactory;
 import org.thoughtcrime.securesms.database.GroupDatabase;
 import org.thoughtcrime.securesms.groups.BadGroupIdException;
 import org.thoughtcrime.securesms.groups.GroupId;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.mms.MessageGroupContext;
 import org.thoughtcrime.securesms.mms.OutgoingGroupUpdateMessage;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.recipients.RecipientId;
 import org.whispersystems.libsignal.util.guava.Optional;
+import org.whispersystems.signalservice.api.messages.SignalServiceContent;
 import org.whispersystems.signalservice.api.messages.SignalServiceDataMessage;
 import org.whispersystems.signalservice.api.messages.SignalServiceGroup;
 import org.whispersystems.signalservice.api.messages.SignalServiceGroupContext;
 import org.whispersystems.signalservice.api.messages.SignalServiceGroupV2;
-import org.whispersystems.signalservice.internal.push.SignalServiceProtos;
 import org.whispersystems.signalservice.internal.push.SignalServiceProtos.GroupContext;
 
 import java.io.IOException;
@@ -40,13 +40,31 @@ public final class GroupUtil {
   private static final String TAG = Log.tag(GroupUtil.class);
 
   /**
+   * @return The group context present on the content if one exists, otherwise null.
+   */
+  public static @Nullable SignalServiceGroupContext getGroupContextIfPresent(@Nullable SignalServiceContent content) {
+    if (content == null) {
+      return null;
+    } else if (content.getDataMessage().isPresent() && content.getDataMessage().get().getGroupContext().isPresent()) {
+      return content.getDataMessage().get().getGroupContext().get();
+    } else if (content.getSyncMessage().isPresent()                 &&
+               content.getSyncMessage().get().getSent().isPresent() &&
+               content.getSyncMessage().get().getSent().get().getMessage().getGroupContext().isPresent())
+    {
+      return content.getSyncMessage().get().getSent().get().getMessage().getGroupContext().get();
+    } else {
+      return null;
+    }
+  }
+
+  /**
    * Result may be a v1 or v2 GroupId.
    */
   public static @NonNull GroupId idFromGroupContext(@NonNull SignalServiceGroupContext groupContext)
       throws BadGroupIdException
   {
     if (groupContext.getGroupV1().isPresent()) {
-      return GroupId.v1Exact(groupContext.getGroupV1().get().getGroupId());
+      return GroupId.v1(groupContext.getGroupV1().get().getGroupId());
     } else if (groupContext.getGroupV2().isPresent()) {
       return GroupId.v2(groupContext.getGroupV2().get().getMasterKey());
     } else {

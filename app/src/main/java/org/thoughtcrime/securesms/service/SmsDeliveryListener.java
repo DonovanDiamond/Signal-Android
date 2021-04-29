@@ -5,17 +5,15 @@ import android.content.Context;
 import android.content.Intent;
 import android.telephony.SmsMessage;
 
+import org.signal.core.util.logging.Log;
+import org.thoughtcrime.securesms.database.SmsDatabase;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.jobmanager.JobManager;
-import org.thoughtcrime.securesms.logging.Log;
-
-import org.thoughtcrime.securesms.ApplicationContext;
-import org.thoughtcrime.securesms.database.SmsDatabase;
 import org.thoughtcrime.securesms.jobs.SmsSentJob;
 
 public class SmsDeliveryListener extends BroadcastReceiver {
 
-  private static final String TAG = SmsDeliveryListener.class.getSimpleName();
+  private static final String TAG = Log.tag(SmsDeliveryListener.class);
 
   public static final String SENT_SMS_ACTION      = "org.thoughtcrime.securesms.SendReceiveService.SENT_SMS_ACTION";
   public static final String DELIVERED_SMS_ACTION = "org.thoughtcrime.securesms.SendReceiveService.DELIVERED_SMS_ACTION";

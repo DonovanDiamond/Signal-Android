@@ -13,12 +13,12 @@ import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.documentfile.provider.DocumentFile;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.backup.BackupPassphrase;
 import org.thoughtcrime.securesms.database.NoExternalStorageException;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.keyvalue.SignalStore;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.permissions.Permissions;
 import org.whispersystems.libsignal.util.ByteUtil;
 
@@ -33,7 +33,7 @@ import java.util.Objects;
 
 public class BackupUtil {
 
-  private static final String TAG = BackupUtil.class.getSimpleName();
+  private static final String TAG = Log.tag(BackupUtil.class);
 
   public static final int PASSPHRASE_LENGTH = 30;
 
@@ -166,7 +166,6 @@ public class BackupUtil {
     return backups;
   }
 
-  @RequiresApi(29)
   public static @Nullable BackupInfo getBackupInfoFromSingleUri(@NonNull Context context, @NonNull Uri singleUri) {
     DocumentFile documentFile = DocumentFile.fromSingleUri(context, singleUri);
 
@@ -206,7 +205,7 @@ public class BackupUtil {
     new SecureRandom().nextBytes(random);
 
     for (int i=0;i<30;i+=5) {
-      result[i/5] = String.format("%05d", ByteUtil.byteArray5ToLong(random, i) % 100000);
+      result[i/5] = String.format(Locale.ENGLISH,  "%05d", ByteUtil.byteArray5ToLong(random, i) % 100000);
     }
 
     return result;

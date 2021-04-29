@@ -2,8 +2,8 @@ package org.thoughtcrime.securesms.glide.cache;
 
 
 import android.graphics.Bitmap;
+
 import androidx.annotation.NonNull;
-import org.thoughtcrime.securesms.logging.Log;
 
 import com.bumptech.glide.load.EncodeStrategy;
 import com.bumptech.glide.load.Options;
@@ -11,13 +11,15 @@ import com.bumptech.glide.load.ResourceEncoder;
 import com.bumptech.glide.load.engine.Resource;
 import com.bumptech.glide.load.resource.bitmap.BitmapEncoder;
 
+import org.signal.core.util.logging.Log;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 
 public class EncryptedBitmapResourceEncoder extends EncryptedCoder implements ResourceEncoder<Bitmap> {
 
-  private static final String TAG = EncryptedBitmapResourceEncoder.class.getSimpleName();
+  private static final String TAG = Log.tag(EncryptedBitmapResourceEncoder.class);
 
   private final byte[] secret;
 

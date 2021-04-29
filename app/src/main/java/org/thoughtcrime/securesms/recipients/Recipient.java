@@ -12,6 +12,9 @@ import androidx.annotation.WorkerThread;
 
 import com.annimon.stream.Stream;
 
+import org.signal.core.util.concurrent.SignalExecutors;
+import org.signal.core.util.logging.Log;
+import org.signal.zkgroup.profiles.ProfileKeyCredential;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.color.MaterialColor;
 import org.thoughtcrime.securesms.contacts.avatars.ContactColors;
@@ -29,9 +32,10 @@ import org.thoughtcrime.securesms.database.RecipientDatabase.MentionSetting;
 import org.thoughtcrime.securesms.database.RecipientDatabase.RegisteredState;
 import org.thoughtcrime.securesms.database.RecipientDatabase.UnidentifiedAccessMode;
 import org.thoughtcrime.securesms.database.RecipientDatabase.VibrateState;
+import org.thoughtcrime.securesms.database.model.databaseprotos.RecipientExtras;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.groups.GroupId;
-import org.thoughtcrime.securesms.logging.Log;
+import org.thoughtcrime.securesms.keyvalue.SignalStore;
 import org.thoughtcrime.securesms.notifications.NotificationChannels;
 import org.thoughtcrime.securesms.phonenumbers.NumberUtil;
 import org.thoughtcrime.securesms.phonenumbers.PhoneNumberFormatter;
@@ -39,13 +43,14 @@ import org.thoughtcrime.securesms.profiles.ProfileName;
 import org.thoughtcrime.securesms.util.FeatureFlags;
 import org.thoughtcrime.securesms.util.StringUtil;
 import org.thoughtcrime.securesms.util.Util;
-import org.thoughtcrime.securesms.util.concurrent.SignalExecutors;
+import org.thoughtcrime.securesms.wallpaper.ChatWallpaper;
 import org.whispersystems.libsignal.util.guava.Optional;
 import org.whispersystems.libsignal.util.guava.Preconditions;
 import org.whispersystems.signalservice.api.push.SignalServiceAddress;
 import org.whispersystems.signalservice.api.util.UuidUtil;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
@@ -84,12 +89,12 @@ public class Recipient {
   private final int                    expireMessages;
   private final RegisteredState        registered;
   private final byte[]                 profileKey;
-  private final byte[]                 profileKeyCredential;
-  private final String                 name;
+  private final ProfileKeyCredential   profileKeyCredential;
+  private final String                 groupName;
   private final Uri                    systemContactPhoto;
   private final String                 customLabel;
   private final Uri                    contactUri;
-  private final ProfileName            profileName;
+  private final ProfileName            signalProfileName;
   private final String                 profileAvatar;
   private final boolean                hasProfileImage;
   private final boolean                profileSharing;
@@ -102,7 +107,13 @@ public class Recipient {
   private final InsightsBannerTier     insightsBannerTier;
   private final byte[]                 storageId;
   private final MentionSetting         mentionSetting;
-
+  private final ChatWallpaper          wallpaper;
+  private final String                 about;
+  private final String                 aboutEmoji;
+  private final ProfileName            systemProfileName;
+  private final String                 systemContactName;
+  private final Optional<Extras>       extras;
+  private final boolean                hasGroupsInCommon;
 
   /**
    * Returns a {@link LiveRecipient}, which contains a {@link Recipient} that may or may not be
@@ -319,11 +330,11 @@ public class Recipient {
     this.registered                  = RegisteredState.UNKNOWN;
     this.profileKey                  = null;
     this.profileKeyCredential        = null;
-    this.name                        = null;
+    this.groupName                   = null;
     this.systemContactPhoto          = null;
     this.customLabel                 = null;
     this.contactUri                  = null;
-    this.profileName                 = ProfileName.EMPTY;
+    this.signalProfileName           = ProfileName.EMPTY;
     this.profileAvatar               = null;
     this.hasProfileImage             = false;
     this.profileSharing              = false;
@@ -335,6 +346,13 @@ public class Recipient {
     this.groupsV1MigrationCapability = Capability.UNKNOWN;
     this.storageId                   = null;
     this.mentionSetting              = MentionSetting.ALWAYS_NOTIFY;
+    this.wallpaper                   = null;
+    this.about                       = null;
+    this.aboutEmoji                  = null;
+    this.systemProfileName           = ProfileName.EMPTY;
+    this.systemContactName           = null;
+    this.extras                      = Optional.absent();
+    this.hasGroupsInCommon           = false;
   }
 
   public Recipient(@NonNull RecipientId id, @NonNull RecipientDetails details, boolean resolved) {
@@ -361,11 +379,11 @@ public class Recipient {
     this.registered                  = details.registered;
     this.profileKey                  = details.profileKey;
     this.profileKeyCredential        = details.profileKeyCredential;
-    this.name                        = details.name;
+    this.groupName                   = details.groupName;
     this.systemContactPhoto          = details.systemContactPhoto;
     this.customLabel                 = details.customLabel;
     this.contactUri                  = details.contactUri;
-    this.profileName                 = details.profileName;
+    this.signalProfileName           = details.profileName;
     this.profileAvatar               = details.profileAvatar;
     this.hasProfileImage             = details.hasProfileImage;
     this.profileSharing              = details.profileSharing;
@@ -377,6 +395,13 @@ public class Recipient {
     this.groupsV1MigrationCapability = details.groupsV1MigrationCapability;
     this.storageId                   = details.storageId;
     this.mentionSetting              = details.mentionSetting;
+    this.wallpaper                   = details.wallpaper;
+    this.about                       = details.about;
+    this.aboutEmoji                  = details.aboutEmoji;
+    this.systemProfileName           = details.systemProfileName;
+    this.systemContactName           = details.systemContactName;
+    this.extras                      = details.extras;
+    this.hasGroupsInCommon           = details.hasGroupsInCommon;
   }
 
   public @NonNull RecipientId getId() {
@@ -391,8 +416,8 @@ public class Recipient {
     return contactUri;
   }
 
-  public @Nullable String getName(@NonNull Context context) {
-    if (this.name == null && groupId != null && groupId.isMms()) {
+  public @Nullable String getGroupName(@NonNull Context context) {
+    if (this.groupName == null && groupId != null && groupId.isMms()) {
       List<String> names = new LinkedList<>();
 
       for (Recipient recipient : participants) {
@@ -400,56 +425,126 @@ public class Recipient {
       }
 
       return Util.join(names, ", ");
-    } else if (name == null && groupId != null && groupId.isPush()) {
+    } else if (groupName == null && groupId != null && groupId.isPush()) {
       return context.getString(R.string.RecipientProvider_unnamed_group);
     } else {
-      return this.name;
+      return this.groupName;
     }
+  }
+
+  public boolean hasName() {
+    return groupName != null;
   }
 
   /**
    * False iff it {@link #getDisplayName} would fall back to e164, email or unknown.
    */
   public boolean hasAUserSetDisplayName(@NonNull Context context) {
-    return !TextUtils.isEmpty(getName(context)) ||
+    return !TextUtils.isEmpty(getGroupName(context))             ||
+           !TextUtils.isEmpty(systemContactName)                 ||
            !TextUtils.isEmpty(getProfileName().toString());
   }
 
   public @NonNull String getDisplayName(@NonNull Context context) {
-    String name = Util.getFirstNonEmpty(getName(context),
-                                        getProfileName().toString(),
-                                        PhoneNumberFormatter.prettyPrint(e164),
-                                        email,
-                                        context.getString(R.string.Recipient_unknown));
+    String name = getGroupName(context);
+
+    if (Util.isEmpty(name)) {
+      name = systemContactName;
+    }
+
+    if (Util.isEmpty(name)) {
+      name = getProfileName().toString();
+    }
+
+    if (Util.isEmpty(name) && !Util.isEmpty(e164)) {
+      name = PhoneNumberFormatter.prettyPrint(e164);
+    }
+
+    if (Util.isEmpty(name)) {
+      name = email;
+    }
+
+    if (Util.isEmpty(name)) {
+      name = context.getString(R.string.Recipient_unknown);
+    }
 
     return StringUtil.isolateBidi(name);
   }
 
   public @NonNull String getDisplayNameOrUsername(@NonNull Context context) {
-    String name = Util.getFirstNonEmpty(getName(context),
-                                        getProfileName().toString(),
-                                        PhoneNumberFormatter.prettyPrint(e164),
-                                        email,
-                                        username,
-                                        context.getString(R.string.Recipient_unknown));
+    String name = getGroupName(context);
 
-    return StringUtil.isolateBidi(name);
+    if (Util.isEmpty(name)) {
+      name = systemContactName;
+    }
+
+    if (Util.isEmpty(name)) {
+      name = StringUtil.isolateBidi(getProfileName().toString());
+    }
+
+    if (Util.isEmpty(name) && !Util.isEmpty(e164)) {
+      name = PhoneNumberFormatter.prettyPrint(e164);
+    }
+
+    if (Util.isEmpty(name)) {
+      name = StringUtil.isolateBidi(email);
+    }
+
+    if (Util.isEmpty(name)) {
+      name = StringUtil.isolateBidi(username);
+    }
+
+    if (Util.isEmpty(name)) {
+      name = StringUtil.isolateBidi(context.getString(R.string.Recipient_unknown));
+    }
+
+    return name;
   }
 
   public @NonNull String getMentionDisplayName(@NonNull Context context) {
-    String name = Util.getFirstNonEmpty(isSelf ? getProfileName().toString() : getName(context),
-                                        isSelf ? getName(context) : getProfileName().toString(),
-                                        PhoneNumberFormatter.prettyPrint(e164),
-                                        email,
-                                        context.getString(R.string.Recipient_unknown));
+    String name = isSelf ? getProfileName().toString() : getGroupName(context);
+    name = StringUtil.isolateBidi(name);
+
+    if (Util.isEmpty(name)) {
+      name = isSelf ? getGroupName(context) : systemContactName;
+      name = StringUtil.isolateBidi(name);
+    }
+
+    if (Util.isEmpty(name)) {
+      name = isSelf ? getGroupName(context) : getProfileName().toString();
+      name = StringUtil.isolateBidi(name);
+    }
+
+    if (Util.isEmpty(name) && !Util.isEmpty(e164)) {
+      name = PhoneNumberFormatter.prettyPrint(e164);
+    }
+
+    if (Util.isEmpty(name)) {
+      name = StringUtil.isolateBidi(email);
+    }
+
+    if (Util.isEmpty(name)) {
+      name = StringUtil.isolateBidi(context.getString(R.string.Recipient_unknown));
+    }
+
+    return name;
+  }
+
+  public @NonNull String getShortDisplayName(@NonNull Context context) {
+    String name = Util.getFirstNonEmpty(getGroupName(context),
+                                        getSystemProfileName().getGivenName(),
+                                        getProfileName().getGivenName(),
+                                        getDisplayName(context));
 
     return StringUtil.isolateBidi(name);
   }
 
-  public @NonNull String getShortDisplayName(@NonNull Context context) {
-    String name = Util.getFirstNonEmpty(getName(context),
+  public @NonNull String getShortDisplayNameIncludingUsername(@NonNull Context context) {
+    String name = Util.getFirstNonEmpty(getGroupName(context),
+                                        getSystemProfileName().getGivenName(),
                                         getProfileName().getGivenName(),
-                                        getDisplayName(context));
+                                        getDisplayName(context),
+                                        getUsername().orNull());
 
     return StringUtil.isolateBidi(name);
   }
@@ -459,7 +554,7 @@ public class Recipient {
       return MaterialColor.GROUP;
     } else if (color != null) {
       return color;
-     } else if (name != null || profileSharing) {
+     } else if (groupName != null || profileSharing) {
       Log.w(TAG, "Had no color for " + id + "! Saving a new one.");
 
       Context       context = ApplicationDependencies.getApplication();
@@ -605,7 +700,11 @@ public class Recipient {
   }
 
   public @NonNull ProfileName getProfileName() {
-    return profileName;
+    return signalProfileName;
+  }
+
+  private @NonNull ProfileName getSystemProfileName() {
+    return systemProfileName;
   }
 
   public @Nullable String getProfileAvatar() {
@@ -677,20 +776,23 @@ public class Recipient {
   }
 
   public @NonNull FallbackContactPhoto getFallbackContactPhoto(@NonNull FallbackPhotoProvider fallbackPhotoProvider) {
-    if      (isSelf)                   return fallbackPhotoProvider.getPhotoForLocalNumber();
-    else if (isResolving())            return fallbackPhotoProvider.getPhotoForResolvingRecipient();
-    else if (isGroupInternal())        return fallbackPhotoProvider.getPhotoForGroup();
-    else if (isGroup())                return fallbackPhotoProvider.getPhotoForGroup();
-    else if (!TextUtils.isEmpty(name)) return fallbackPhotoProvider.getPhotoForRecipientWithName(name);
-    else                               return fallbackPhotoProvider.getPhotoForRecipientWithoutName();
+    if      (isSelf)                                return fallbackPhotoProvider.getPhotoForLocalNumber();
+    else if (isResolving())                         return fallbackPhotoProvider.getPhotoForResolvingRecipient();
+    else if (isGroupInternal())                     return fallbackPhotoProvider.getPhotoForGroup();
+    else if (isGroup())                             return fallbackPhotoProvider.getPhotoForGroup();
+    else if (!TextUtils.isEmpty(groupName))         return fallbackPhotoProvider.getPhotoForRecipientWithName(groupName);
+    else if (!TextUtils.isEmpty(systemContactName)) return fallbackPhotoProvider.getPhotoForRecipientWithName(systemContactName);
+    else if (!signalProfileName.isEmpty())          return fallbackPhotoProvider.getPhotoForRecipientWithName(signalProfileName.toString());
+    else                                            return fallbackPhotoProvider.getPhotoForRecipientWithoutName();
   }
 
   public @Nullable ContactPhoto getContactPhoto() {
-    if      (isSelf)                                         return null;
-    else if (isGroupInternal() && groupAvatarId.isPresent()) return new GroupRecordContactPhoto(groupId, groupAvatarId.get());
-    else if (systemContactPhoto != null)                     return new SystemContactPhoto(id, systemContactPhoto, 0);
-    else if (profileAvatar != null && hasProfileImage)       return new ProfileContactPhoto(this, profileAvatar);
-    else                                                     return null;
+    if      (isSelf)                                                                             return null;
+    else if (isGroupInternal() && groupAvatarId.isPresent())                                     return new GroupRecordContactPhoto(groupId, groupAvatarId.get());
+    else if (systemContactPhoto != null && SignalStore.settings().isPreferSystemContactPhotos()) return new SystemContactPhoto(id, systemContactPhoto, 0);
+    else if (profileAvatar != null && hasProfileImage)                                           return new ProfileContactPhoto(this, profileAvatar);
+    else if (systemContactPhoto != null)                                                         return new SystemContactPhoto(id, systemContactPhoto, 0);
+    else                                                                                         return null;
   }
 
   public @Nullable Uri getMessageRingtone() {
@@ -772,7 +874,7 @@ public class Recipient {
     return profileKey;
   }
 
-  public @Nullable byte[] getProfileKeyCredential() {
+  public @Nullable ProfileKeyCredential getProfileKeyCredential() {
     return profileKeyCredential;
   }
 
@@ -788,8 +890,61 @@ public class Recipient {
     return unidentifiedAccessMode;
   }
 
+  public @Nullable ChatWallpaper getWallpaper() {
+    if (wallpaper != null) {
+      return wallpaper;
+    } else {
+      return SignalStore.wallpaper().getWallpaper();
+    }
+  }
+
+  public boolean hasOwnWallpaper() {
+    return wallpaper != null;
+  }
+
+  /**
+   * A cheap way to check if wallpaper is set without doing any unnecessary proto parsing.
+   */
+  public boolean hasWallpaper() {
+    return wallpaper != null || SignalStore.wallpaper().hasWallpaperSet();
+  }
+
   public boolean isSystemContact() {
     return contactUri != null;
+  }
+
+  public @Nullable String getAbout() {
+    return about;
+  }
+
+  public @Nullable String getAboutEmoji() {
+    return aboutEmoji;
+  }
+
+  public @Nullable String getCombinedAboutAndEmoji() {
+    if (!Util.isEmpty(aboutEmoji)) {
+      if (!Util.isEmpty(about)) {
+        return aboutEmoji + " " + about;
+      } else {
+        return aboutEmoji;
+      }
+    } else if (!Util.isEmpty(about)) {
+      return about;
+    } else {
+      return null;
+    }
+  }
+
+  public boolean shouldBlurAvatar() {
+    boolean showOverride = false;
+    if (extras.isPresent()) {
+      showOverride = extras.get().manuallyShownAvatar();
+    }
+    return !showOverride && !isSelf() && !isProfileSharing() && !isSystemContact() && !hasGroupsInCommon && isRegistered();
+  }
+
+  public boolean hasGroupsInCommon() {
+    return hasGroupsInCommon;
   }
 
   /**
@@ -831,6 +986,12 @@ public class Recipient {
     return id.equals(recipient.id);
   }
 
+  @Override
+  public int hashCode() {
+    return Objects.hash(id);
+  }
+
+
   public enum Capability {
     UNKNOWN(0),
     SUPPORTED(1),
@@ -860,10 +1021,101 @@ public class Recipient {
     }
   }
 
-  @Override
-  public int hashCode() {
-    return Objects.hash(id);
+  public static final class Extras {
+    private final RecipientExtras recipientExtras;
+
+    public static @Nullable Extras from(@Nullable RecipientExtras recipientExtras) {
+      if (recipientExtras != null) {
+        return new Extras(recipientExtras);
+      } else {
+        return null;
+      }
+    }
+
+    private Extras(@NonNull RecipientExtras extras) {
+      this.recipientExtras = extras;
+    }
+
+    public boolean manuallyShownAvatar() {
+      return recipientExtras.getManuallyShownAvatar();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      final Extras that = (Extras) o;
+      return manuallyShownAvatar() == that.manuallyShownAvatar();
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(manuallyShownAvatar());
+    }
   }
+
+  public boolean hasSameContent(@NonNull Recipient other) {
+    return Objects.equals(id, other.id) &&
+           resolving == other.resolving &&
+           isSelf == other.isSelf &&
+           blocked == other.blocked &&
+           muteUntil == other.muteUntil &&
+           expireMessages == other.expireMessages &&
+           hasProfileImage == other.hasProfileImage &&
+           profileSharing == other.profileSharing &&
+           lastProfileFetch == other.lastProfileFetch &&
+           forceSmsSelection == other.forceSmsSelection &&
+           Objects.equals(id, other.id) &&
+           Objects.equals(uuid, other.uuid) &&
+           Objects.equals(username, other.username) &&
+           Objects.equals(e164, other.e164) &&
+           Objects.equals(email, other.email) &&
+           Objects.equals(groupId, other.groupId) &&
+           allContentsAreTheSame(participants, other.participants) &&
+           Objects.equals(groupAvatarId, other.groupAvatarId) &&
+           messageVibrate == other.messageVibrate &&
+           callVibrate == other.callVibrate &&
+           Objects.equals(messageRingtone, other.messageRingtone) &&
+           Objects.equals(callRingtone, other.callRingtone) &&
+           color == other.color &&
+           Objects.equals(defaultSubscriptionId, other.defaultSubscriptionId) &&
+           registered == other.registered &&
+           Arrays.equals(profileKey, other.profileKey) &&
+           Objects.equals(profileKeyCredential, other.profileKeyCredential) &&
+           Objects.equals(groupName, other.groupName) &&
+           Objects.equals(systemContactPhoto, other.systemContactPhoto) &&
+           Objects.equals(customLabel, other.customLabel) &&
+           Objects.equals(contactUri, other.contactUri) &&
+           Objects.equals(signalProfileName, other.signalProfileName) &&
+           Objects.equals(systemProfileName, other.systemProfileName) &&
+           Objects.equals(profileAvatar, other.profileAvatar) &&
+           Objects.equals(notificationChannel, other.notificationChannel) &&
+           unidentifiedAccessMode == other.unidentifiedAccessMode &&
+           groupsV2Capability == other.groupsV2Capability &&
+           groupsV1MigrationCapability == other.groupsV1MigrationCapability &&
+           insightsBannerTier == other.insightsBannerTier &&
+           Arrays.equals(storageId, other.storageId) &&
+           mentionSetting == other.mentionSetting &&
+           Objects.equals(wallpaper, other.wallpaper) &&
+           Objects.equals(about, other.about) &&
+           Objects.equals(aboutEmoji, other.aboutEmoji) &&
+           Objects.equals(extras, other.extras);
+  }
+
+  private static boolean allContentsAreTheSame(@NonNull List<Recipient> a, @NonNull List<Recipient> b) {
+    if (a.size() != b.size()) {
+      return false;
+    }
+
+    for (int i = 0, len = a.size(); i < len; i++) {
+      if (!a.get(i).hasSameContent(b.get(i))) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
 
   public static class FallbackPhotoProvider {
     public @NonNull FallbackContactPhoto getPhotoForLocalNumber() {
@@ -885,7 +1137,6 @@ public class Recipient {
     public @NonNull FallbackContactPhoto getPhotoForRecipientWithoutName() {
       return new ResourceContactPhoto(R.drawable.ic_profile_outline_40, R.drawable.ic_profile_outline_20, R.drawable.ic_profile_outline_48);
     }
-
   }
 
   private static class MissingAddressError extends AssertionError {

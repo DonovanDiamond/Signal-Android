@@ -6,8 +6,8 @@ import android.os.Build;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.crypto.KeyStoreHelper;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
 
 /**
@@ -18,7 +18,7 @@ public final class BackupPassphrase {
   private BackupPassphrase() {
   }
 
-  private static final String TAG = BackupPassphrase.class.getSimpleName();
+  private static final String TAG = Log.tag(BackupPassphrase.class);
 
   public static @Nullable String get(@NonNull Context context) {
     String passphrase          = TextSecurePreferences.getBackupPassphrase(context);

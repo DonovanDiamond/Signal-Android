@@ -6,7 +6,7 @@ import androidx.annotation.VisibleForTesting;
 import com.google.i18n.phonenumbers.NumberParseException;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;
 
-import org.thoughtcrime.securesms.logging.Log;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.recipients.Recipient;
 
 import java.util.HashMap;
@@ -29,7 +29,7 @@ public final class PopulationFeatureFlags {
    * In research megaphone group for given country code
    */
   public static boolean isInResearchMegaphone() {
-    return isEnabled(FeatureFlags.RESEARCH_MEGAPHONE_1, FeatureFlags.researchMegaphone());
+    return false;
   }
 
   /**

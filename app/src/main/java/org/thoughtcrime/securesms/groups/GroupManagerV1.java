@@ -9,6 +9,7 @@ import androidx.annotation.WorkerThread;
 
 import com.google.protobuf.ByteString;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.attachments.Attachment;
 import org.thoughtcrime.securesms.attachments.UriAttachment;
 import org.thoughtcrime.securesms.database.AttachmentDatabase;
@@ -19,7 +20,6 @@ import org.thoughtcrime.securesms.database.ThreadDatabase;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.groups.GroupManager.GroupActionResult;
 import org.thoughtcrime.securesms.jobs.LeaveGroupJob;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.mms.MmsException;
 import org.thoughtcrime.securesms.mms.OutgoingExpirationUpdateMessage;
 import org.thoughtcrime.securesms.mms.OutgoingGroupUpdateMessage;
@@ -74,7 +74,15 @@ final class GroupManagerV1 {
       DatabaseFactory.getRecipientDatabase(context).setProfileSharing(groupRecipient.getId(), true);
       return sendGroupUpdate(context, groupIdV1, memberIds, name, avatarBytes, memberIds.size() - 1);
     } else {
-      groupDatabase.create(groupId.requireMms(), memberIds);
+      groupDatabase.create(groupId.requireMms(), name, memberIds);
+
+      try {
+        AvatarHelper.setAvatar(context, groupRecipientId, avatarBytes != null ? new ByteArrayInputStream(avatarBytes) : null);
+      } catch (IOException e) {
+        Log.w(TAG, "Failed to save avatar!", e);
+      }
+      groupDatabase.onAvatarUpdated(groupId, avatarBytes != null);
+
       long threadId = DatabaseFactory.getThreadDatabase(context).getThreadIdFor(groupRecipient, ThreadDatabase.DistributionTypes.CONVERSATION);
       return new GroupActionResult(groupRecipient, threadId, memberIds.size() - 1, Collections.emptyList());
     }
@@ -112,6 +120,28 @@ final class GroupManagerV1 {
     }
   }
 
+  static GroupActionResult updateGroup(@NonNull  Context     context,
+                                       @NonNull  GroupId.Mms groupId,
+                                       @Nullable byte[]      avatarBytes,
+                                       @Nullable String      name)
+  {
+    GroupDatabase groupDatabase    = DatabaseFactory.getGroupDatabase(context);
+    RecipientId   groupRecipientId = DatabaseFactory.getRecipientDatabase(context).getOrInsertFromGroupId(groupId);
+    Recipient     groupRecipient   = Recipient.resolved(groupRecipientId);
+    long          threadId         = DatabaseFactory.getThreadDatabase(context).getThreadIdFor(groupRecipient);
+
+    groupDatabase.updateTitle(groupId, name);
+    groupDatabase.onAvatarUpdated(groupId, avatarBytes != null);
+
+    try {
+      AvatarHelper.setAvatar(context, groupRecipientId, avatarBytes != null ? new ByteArrayInputStream(avatarBytes) : null);
+    } catch (IOException e) {
+      Log.w(TAG, "Failed to save avatar!", e);
+    }
+
+    return new GroupActionResult(groupRecipient, threadId, 0, Collections.emptyList());
+  }
+
   private static GroupActionResult sendGroupUpdate(@NonNull Context context,
                                                    @NonNull GroupId.V1 groupId,
                                                    @NonNull Set<RecipientId> members,
@@ -146,7 +176,7 @@ final class GroupManagerV1 {
 
     if (avatar != null) {
       Uri avatarUri = BlobProvider.getInstance().forData(avatar).createForSingleUseInMemory();
-      avatarAttachment = new UriAttachment(avatarUri, MediaUtil.IMAGE_PNG, AttachmentDatabase.TRANSFER_PROGRESS_DONE, avatar.length, null, false, false, false, null, null, null, null, null);
+      avatarAttachment = new UriAttachment(avatarUri, MediaUtil.IMAGE_PNG, AttachmentDatabase.TRANSFER_PROGRESS_DONE, avatar.length, null, false, false, false, false, null, null, null, null, null);
     }
 
     OutgoingGroupUpdateMessage outgoingMessage = new OutgoingGroupUpdateMessage(groupRecipient, groupContext, avatarAttachment, System.currentTimeMillis(), 0, false, null, Collections.emptyList(), Collections.emptyList(), Collections.emptyList());

@@ -5,8 +5,10 @@ import android.content.pm.PackageManager;
 
 import androidx.annotation.NonNull;
 
+import org.signal.core.util.logging.Log;
+import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
+import org.thoughtcrime.securesms.jobs.RemoteConfigRefreshJob;
 import org.thoughtcrime.securesms.keyvalue.SignalStore;
-import org.thoughtcrime.securesms.logging.Log;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -28,6 +30,7 @@ public class VersionTracker {
         Log.i(TAG, "Upgraded from " + lastVersionCode + " to " + currentVersionCode);
         SignalStore.misc().clearClientDeprecated();
         TextSecurePreferences.setLastVersionCode(context, currentVersionCode);
+        ApplicationDependencies.getJobManager().add(new RemoteConfigRefreshJob());
       }
     } catch (IOException ioe) {
       throw new AssertionError(ioe);

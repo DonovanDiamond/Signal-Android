@@ -30,7 +30,9 @@ import androidx.core.content.ContextCompat;
 
 import com.annimon.stream.Stream;
 
+import org.signal.core.util.logging.Log;
 import org.signal.storageservice.protos.groups.local.DecryptedGroup;
+import org.signal.storageservice.protos.groups.local.DecryptedGroupChange;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.database.MmsSmsColumns;
 import org.thoughtcrime.securesms.database.SmsDatabase;
@@ -39,7 +41,7 @@ import org.thoughtcrime.securesms.database.documents.NetworkFailure;
 import org.thoughtcrime.securesms.database.model.databaseprotos.DecryptedGroupV2Context;
 import org.thoughtcrime.securesms.database.model.databaseprotos.GroupCallUpdateDetails;
 import org.thoughtcrime.securesms.database.model.databaseprotos.ProfileChangeDetails;
-import org.thoughtcrime.securesms.logging.Log;
+import org.thoughtcrime.securesms.groups.GroupMigrationMembershipChange;
 import org.thoughtcrime.securesms.profiles.ProfileName;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.recipients.RecipientId;
@@ -54,6 +56,8 @@ import org.whispersystems.signalservice.api.groupsv2.DecryptedGroupUtil;
 import org.whispersystems.signalservice.api.util.UuidUtil;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -93,10 +97,12 @@ public abstract class MessageRecord extends DisplayRecord {
                 List<NetworkFailure> networkFailures,
                 int subscriptionId, long expiresIn, long expireStarted,
                 int readReceiptCount, boolean unidentified,
-                @NonNull List<ReactionRecord> reactions, boolean remoteDelete, long notifiedTimestamp)
+                @NonNull List<ReactionRecord> reactions, boolean remoteDelete, long notifiedTimestamp,
+                int viewedReceiptCount)
   {
     super(body, conversationRecipient, dateSent, dateReceived,
-          threadId, deliveryStatus, deliveryReceiptCount, type, readReceiptCount);
+          threadId, deliveryStatus, deliveryReceiptCount, type,
+          readReceiptCount, viewedReceiptCount);
     this.id                  = id;
     this.individualRecipient = individualRecipient;
     this.recipientDeviceId   = recipientDeviceId;
@@ -158,7 +164,7 @@ public abstract class MessageRecord extends DisplayRecord {
     } else if (isMissedVideoCall()) {
       return staticUpdateDescription(context.getString(R.string.MessageRecord_missed_video_call_date, getCallDateString(context)), R.drawable.ic_update_video_call_missed_16, ContextCompat.getColor(context, R.color.core_red_shade), ContextCompat.getColor(context, R.color.core_red));
     } else if (isGroupCall()) {
-      return getGroupCallUpdateDescription(context, getBody());
+      return getGroupCallUpdateDescription(context, getBody(), true);
     } else if (isJoined()) {
       return staticUpdateDescription(context.getString(R.string.MessageRecord_s_joined_signal, getIndividualRecipient().getDisplayName(context)), R.drawable.ic_update_group_add_16);
     } else if (isExpirationTimerUpdate()) {
@@ -184,15 +190,45 @@ public abstract class MessageRecord extends DisplayRecord {
       if (isOutgoing()) return staticUpdateDescription(context.getString(R.string.SmsMessageRecord_secure_session_reset), R.drawable.ic_update_info_16);
       else              return fromRecipient(getIndividualRecipient(), r-> context.getString(R.string.SmsMessageRecord_secure_session_reset_s, r.getDisplayName(context)), R.drawable.ic_update_info_16);
     } else if (isGroupV1MigrationEvent()) {
-      if (Util.isEmpty(getBody())) {
-        return staticUpdateDescription(context.getString(R.string.MessageRecord_this_group_was_updated_to_a_new_group), R.drawable.ic_update_group_role_16);
-      } else {
-        int count = getGroupV1MigrationEventInvites().size();
-        return staticUpdateDescription(context.getResources().getQuantityString(R.plurals.MessageRecord_members_couldnt_be_added_to_the_new_group_and_have_been_invited, count, count), R.drawable.ic_update_group_add_16);
-      }
+      return getGroupMigrationEventDescription(context);
+    } else if (isFailedDecryptionType()) {
+      return staticUpdateDescription(context.getString(R.string.MessageRecord_chat_session_refreshed), R.drawable.ic_refresh_16);
     }
 
     return null;
+  }
+
+  public boolean isSelfCreatedGroup() {
+    DecryptedGroupV2Context decryptedGroupV2Context = getDecryptedGroupV2Context();
+
+    if (decryptedGroupV2Context == null) {
+      return false;
+    }
+    DecryptedGroupChange change = decryptedGroupV2Context.getChange();
+
+    return selfCreatedGroup(change);
+  }
+
+  private  @Nullable DecryptedGroupV2Context getDecryptedGroupV2Context() {
+    if (!isGroupUpdate() || !isGroupV2()) {
+      return null;
+    }
+
+    DecryptedGroupV2Context decryptedGroupV2Context;
+    try {
+      byte[] decoded = Base64.decode(getBody());
+      decryptedGroupV2Context = DecryptedGroupV2Context.parseFrom(decoded);
+
+    } catch (IOException e) {
+      Log.w(TAG, "GV2 Message update detail could not be read", e);
+      decryptedGroupV2Context = null;
+    }
+    return decryptedGroupV2Context;
+  }
+
+  private static boolean selfCreatedGroup(@NonNull DecryptedGroupChange change) {
+    return change.getRevision() == 0 &&
+           change.getEditor().equals(UuidUtil.toByteString(Recipient.self().requireUuid()));
   }
 
   public static @NonNull UpdateDescription getGv2ChangeDescription(@NonNull Context context, @NonNull String body) {
@@ -204,6 +240,9 @@ public abstract class MessageRecord extends DisplayRecord {
 
       if (decryptedGroupV2Context.hasChange() && (decryptedGroupV2Context.getGroupState().getRevision() != 0 || decryptedGroupV2Context.hasPreviousGroupState())) {
         return UpdateDescription.concatWithNewLines(updateMessageProducer.describeChanges(decryptedGroupV2Context.getPreviousGroupState(), decryptedGroupV2Context.getChange()));
+      } else if (selfCreatedGroup(decryptedGroupV2Context.getChange())) {
+        return UpdateDescription.concatWithNewLines(Arrays.asList(updateMessageProducer.describeNewGroup(decryptedGroupV2Context.getGroupState(), decryptedGroupV2Context.getChange()),
+                                                                  staticUpdateDescription(context.getString(R.string.MessageRecord_invite_friends_to_this_group), 0)));
       } else {
         return updateMessageProducer.describeNewGroup(decryptedGroupV2Context.getGroupState(), decryptedGroupV2Context.getChange());
       }
@@ -214,26 +253,25 @@ public abstract class MessageRecord extends DisplayRecord {
   }
 
   public @Nullable InviteAddState getGv2AddInviteState() {
-    try {
-      byte[]                  decoded                 = Base64.decode(getBody());
-      DecryptedGroupV2Context decryptedGroupV2Context = DecryptedGroupV2Context.parseFrom(decoded);
-      DecryptedGroup          groupState              = decryptedGroupV2Context.getGroupState();
-      boolean                 invited                 = DecryptedGroupUtil.findPendingByUuid(groupState.getPendingMembersList(), Recipient.self().requireUuid()).isPresent();
+    DecryptedGroupV2Context decryptedGroupV2Context = getDecryptedGroupV2Context();
 
-      if (decryptedGroupV2Context.hasChange()) {
-        UUID changeEditor = UuidUtil.fromByteStringOrNull(decryptedGroupV2Context.getChange().getEditor());
-
-        if (changeEditor != null) {
-          return new InviteAddState(invited, changeEditor);
-        }
-      }
-
-      Log.w(TAG, "GV2 Message editor could not be determined");
-      return null;
-    } catch (IOException e) {
-      Log.w(TAG, "GV2 Message update detail could not be read", e);
+    if (decryptedGroupV2Context == null) {
       return null;
     }
+
+    DecryptedGroup groupState = decryptedGroupV2Context.getGroupState();
+    boolean        invited    = DecryptedGroupUtil.findPendingByUuid(groupState.getPendingMembersList(), Recipient.self().requireUuid()).isPresent();
+
+    if (decryptedGroupV2Context.hasChange()) {
+      UUID changeEditor = UuidUtil.fromByteStringOrNull(decryptedGroupV2Context.getChange().getEditor());
+
+      if (changeEditor != null) {
+        return new InviteAddState(invited, changeEditor);
+      }
+    }
+
+    Log.w(TAG, "GV2 Message editor could not be determined");
+    return null;
   }
 
   private @NonNull String getCallDateString(@NonNull Context context) {
@@ -286,7 +324,30 @@ public abstract class MessageRecord extends DisplayRecord {
     return context.getString(R.string.MessageRecord_changed_their_profile, getIndividualRecipient().getDisplayName(context));
   }
 
-  public static @NonNull UpdateDescription getGroupCallUpdateDescription(@NonNull Context context, @NonNull String body) {
+  private UpdateDescription getGroupMigrationEventDescription(@NonNull Context context) {
+    if (Util.isEmpty(getBody())) {
+      return staticUpdateDescription(context.getString(R.string.MessageRecord_this_group_was_updated_to_a_new_group), R.drawable.ic_update_group_role_16);
+    } else {
+      GroupMigrationMembershipChange change  = getGroupV1MigrationMembershipChanges();
+      List<UpdateDescription>        updates = new ArrayList<>(2);
+
+      if (change.getPending().size() == 1 && change.getPending().get(0).equals(Recipient.self().getId())) {
+        updates.add(staticUpdateDescription(context.getString(R.string.MessageRecord_you_couldnt_be_added_to_the_new_group_and_have_been_invited_to_join), R.drawable.ic_update_group_add_16));
+      } else if (change.getPending().size() > 0) {
+        int count = change.getPending().size();
+        updates.add(staticUpdateDescription(context.getResources().getQuantityString(R.plurals.MessageRecord_members_couldnt_be_added_to_the_new_group_and_have_been_invited, count, count), R.drawable.ic_update_group_add_16));
+      }
+
+      if (change.getDropped().size() > 0) {
+        int count = change.getDropped().size();
+        updates.add(staticUpdateDescription(context.getResources().getQuantityString(R.plurals.MessageRecord_members_couldnt_be_added_to_the_new_group_and_have_been_removed, count, count), R.drawable.ic_update_group_remove_16));
+      }
+
+      return UpdateDescription.concatWithNewLines(updates);
+    }
+  }
+
+  public static @NonNull UpdateDescription getGroupCallUpdateDescription(@NonNull Context context, @NonNull String body, boolean withTime) {
     GroupCallUpdateDetails groupCallUpdateDetails = GroupCallUpdateDetailsUtil.parse(body);
 
     List<UUID> joinedMembers = Stream.of(groupCallUpdateDetails.getInCallUuidsList())
@@ -294,7 +355,7 @@ public abstract class MessageRecord extends DisplayRecord {
                                      .withoutNulls()
                                      .toList();
 
-    UpdateDescription.StringFactory stringFactory = new GroupCallUpdateMessageFactory(context, joinedMembers, groupCallUpdateDetails);
+    UpdateDescription.StringFactory stringFactory = new GroupCallUpdateMessageFactory(context, joinedMembers, withTime, groupCallUpdateDetails);
 
     return UpdateDescription.mentioning(joinedMembers, stringFactory, R.drawable.ic_video_16);
   }
@@ -378,18 +439,18 @@ public abstract class MessageRecord extends DisplayRecord {
     return SmsDatabase.Types.isGroupV1MigrationEvent(type);
   }
 
-  public @NonNull List<RecipientId> getGroupV1MigrationEventInvites() {
+  public @NonNull GroupMigrationMembershipChange getGroupV1MigrationMembershipChanges() {
     if (isGroupV1MigrationEvent()) {
-      return RecipientId.fromSerializedList(getBody());
+      return GroupMigrationMembershipChange.deserialize(getBody());
     } else {
-      return Collections.emptyList();
+      return GroupMigrationMembershipChange.empty();
     }
   }
 
   public boolean isUpdate() {
     return isGroupAction() || isJoined() || isExpirationTimerUpdate() || isCallLog() ||
            isEndSession()  || isIdentityUpdate() || isIdentityVerified() || isIdentityDefault() ||
-           isProfileChange() || isGroupV1MigrationEvent();
+           isProfileChange() || isGroupV1MigrationEvent() || isFailedDecryptionType();
   }
 
   public boolean isMediaPending() {
@@ -422,6 +483,14 @@ public abstract class MessageRecord extends DisplayRecord {
 
   public boolean hasFailedWithNetworkFailures() {
     return isFailed() && ((getRecipient().isPushGroup() && hasNetworkFailures()) || !isIdentityMismatchFailure());
+  }
+
+  public boolean isFailedDecryptionType() {
+    return MmsSmsColumns.Types.isFailedDecryptType(type);
+  }
+
+  public boolean isInMemoryMessageRecord() {
+    return false;
   }
 
   protected static SpannableString emphasisAdded(String sequence) {

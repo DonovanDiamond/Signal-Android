@@ -4,15 +4,14 @@ import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.os.AsyncTask;
 
 import androidx.annotation.NonNull;
-import androidx.core.app.NotificationManagerCompat;
 
 import com.annimon.stream.Collectors;
 import com.annimon.stream.Stream;
 
-import org.thoughtcrime.securesms.ApplicationContext;
+import org.signal.core.util.concurrent.SignalExecutors;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.database.DatabaseFactory;
 import org.thoughtcrime.securesms.database.MessageDatabase.ExpirationInfo;
 import org.thoughtcrime.securesms.database.MessageDatabase.MarkedMessageInfo;
@@ -20,7 +19,6 @@ import org.thoughtcrime.securesms.database.MessageDatabase.SyncMessageId;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.jobs.MultiDeviceReadUpdateJob;
 import org.thoughtcrime.securesms.jobs.SendReadReceiptJob;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.recipients.RecipientId;
 import org.thoughtcrime.securesms.service.ExpiringMessageManager;
 
@@ -30,7 +28,7 @@ import java.util.Map;
 
 public class MarkReadReceiver extends BroadcastReceiver {
 
-  private static final String TAG                   = MarkReadReceiver.class.getSimpleName();
+  private static final String TAG                   = Log.tag(MarkReadReceiver.class);
   public static final  String CLEAR_ACTION          = "org.thoughtcrime.securesms.notifications.CLEAR";
   public static final  String THREAD_IDS_EXTRA      = "thread_ids";
   public static final  String NOTIFICATION_ID_EXTRA = "notification_id";
@@ -44,26 +42,28 @@ public class MarkReadReceiver extends BroadcastReceiver {
     final long[] threadIds = intent.getLongArrayExtra(THREAD_IDS_EXTRA);
 
     if (threadIds != null) {
-      NotificationManagerCompat.from(context).cancel(intent.getIntExtra(NOTIFICATION_ID_EXTRA, -1));
+      MessageNotifier notifier = ApplicationDependencies.getMessageNotifier();
+      for (long threadId : threadIds) {
+        notifier.removeStickyThread(threadId);
+      }
 
-      new AsyncTask<Void, Void, Void>() {
-        @Override
-        protected Void doInBackground(Void... params) {
-          List<MarkedMessageInfo> messageIdsCollection = new LinkedList<>();
+      NotificationCancellationHelper.cancelLegacy(context, intent.getIntExtra(NOTIFICATION_ID_EXTRA, -1));
 
-          for (long threadId : threadIds) {
-            Log.i(TAG, "Marking as read: " + threadId);
-            List<MarkedMessageInfo> messageIds = DatabaseFactory.getThreadDatabase(context).setRead(threadId, true);
-            messageIdsCollection.addAll(messageIds);
-          }
+      PendingResult finisher = goAsync();
+      SignalExecutors.BOUNDED.execute(() -> {
+        List<MarkedMessageInfo> messageIdsCollection = new LinkedList<>();
 
-          process(context, messageIdsCollection);
-
-          ApplicationDependencies.getMessageNotifier().updateNotification(context);
-
-          return null;
+        for (long threadId : threadIds) {
+          Log.i(TAG, "Marking as read: " + threadId);
+          List<MarkedMessageInfo> messageIds = DatabaseFactory.getThreadDatabase(context).setRead(threadId, true);
+          messageIdsCollection.addAll(messageIds);
         }
-      }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+
+        process(context, messageIdsCollection);
+
+        ApplicationDependencies.getMessageNotifier().updateNotification(context);
+        finisher.finish();
+      });
     }
   }
 
@@ -86,7 +86,7 @@ public class MarkReadReceiver extends BroadcastReceiver {
 
     scheduleDeletion(context, smsExpirationInfo, mmsExpirationInfo);
 
-    ApplicationDependencies.getJobManager().add(new MultiDeviceReadUpdateJob(syncMessageIds));
+    MultiDeviceReadUpdateJob.enqueue(syncMessageIds);
 
     Map<Long, List<MarkedMessageInfo>> threadToInfo = Stream.of(markedReadMessages)
                                                             .collect(Collectors.groupingBy(MarkedMessageInfo::getThreadId));
@@ -117,7 +117,7 @@ public class MarkReadReceiver extends BroadcastReceiver {
     }
 
     if (smsExpirationInfo.size() + mmsExpirationInfo.size() > 0) {
-      ExpiringMessageManager expirationManager = ApplicationContext.getInstance(context).getExpiringMessageManager();
+      ExpiringMessageManager expirationManager = ApplicationDependencies.getExpiringMessageManager();
 
       Stream.concat(Stream.of(smsExpirationInfo), Stream.of(mmsExpirationInfo))
             .forEach(info -> expirationManager.scheduleDeletion(info.getId(), info.isMms(), info.getExpiresIn()));

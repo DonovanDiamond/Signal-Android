@@ -5,24 +5,25 @@ import android.app.Application;
 
 import androidx.annotation.NonNull;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.crypto.UnidentifiedAccessUtil;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.jobmanager.Data;
 import org.thoughtcrime.securesms.jobmanager.Job;
 import org.thoughtcrime.securesms.jobmanager.JobManager;
 import org.thoughtcrime.securesms.jobmanager.impl.NetworkConstraint;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.recipients.RecipientId;
 import org.thoughtcrime.securesms.recipients.RecipientUtil;
+import org.thoughtcrime.securesms.transport.UndeliverableMessageException;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
 import org.thoughtcrime.securesms.util.Util;
-import org.whispersystems.libsignal.util.guava.Preconditions;
 import org.whispersystems.signalservice.api.SignalServiceMessageSender;
 import org.whispersystems.signalservice.api.crypto.UntrustedIdentityException;
 import org.whispersystems.signalservice.api.messages.SignalServiceReceiptMessage;
 import org.whispersystems.signalservice.api.push.SignalServiceAddress;
 import org.whispersystems.signalservice.api.push.exceptions.PushNetworkException;
+import org.whispersystems.signalservice.api.push.exceptions.ServerRejectedException;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -33,9 +34,9 @@ public class SendReadReceiptJob extends BaseJob {
 
   public static final String KEY = "SendReadReceiptJob";
 
-  private static final String TAG = SendReadReceiptJob.class.getSimpleName();
+  private static final String TAG = Log.tag(SendReadReceiptJob.class);
 
-  private static final int MAX_TIMESTAMPS = 500;
+  static final int MAX_TIMESTAMPS = 500;
 
   private static final String KEY_THREAD      = "thread";
   private static final String KEY_ADDRESS     = "address";
@@ -53,6 +54,7 @@ public class SendReadReceiptJob extends BaseJob {
                            .addConstraint(NetworkConstraint.KEY)
                            .setLifespan(TimeUnit.DAYS.toMillis(1))
                            .setMaxAttempts(Parameters.UNLIMITED)
+                           .setQueue(recipientId.toQueueKey())
                            .build(),
          threadId,
          recipientId,
@@ -111,7 +113,7 @@ public class SendReadReceiptJob extends BaseJob {
   }
 
   @Override
-  public void onRun() throws IOException, UntrustedIdentityException {
+  public void onRun() throws IOException, UntrustedIdentityException, UndeliverableMessageException {
     if (!TextSecurePreferences.isReadReceiptsEnabled(context) || messageIds.isEmpty()) return;
 
     if (!RecipientUtil.isMessageRequestAccepted(context, threadId)) {
@@ -141,6 +143,7 @@ public class SendReadReceiptJob extends BaseJob {
 
   @Override
   public boolean onShouldRetry(@NonNull Exception e) {
+    if (e instanceof ServerRejectedException) return false;
     if (e instanceof PushNetworkException) return true;
     return false;
   }
@@ -150,7 +153,7 @@ public class SendReadReceiptJob extends BaseJob {
     Log.w(TAG, "Failed to send read receipts to: " + recipientId);
   }
 
-  private static <E> List<E> ensureSize(@NonNull List<E> list, int maxSize) {
+  static <E> List<E> ensureSize(@NonNull List<E> list, int maxSize) {
     if (list.size() > maxSize) {
       throw new IllegalArgumentException("Too large! Size: " + list.size() + ", maxSize: " + maxSize);
     }

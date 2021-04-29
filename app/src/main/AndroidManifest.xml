@@ -64,7 +64,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
 
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
-    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" />
 
     <!-- So we can add a TextSecure 'Account' -->
     <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
@@ -116,7 +115,7 @@
     <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
 
     <activity android:name=".WebRtcCallActivity"
-              android:theme="@style/TextSecure.LightTheme.WebRTCCall"
+              android:theme="@style/TextSecure.DarkTheme.WebRTCCall"
               android:excludeFromRecents="true"
               android:screenOrientation="portrait"
               android:supportsPictureInPicture="true"
@@ -159,12 +158,15 @@
     <activity android:name=".preferences.MmsPreferencesActivity"
                android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"/>
 
+    <activity android:name=".sharing.interstitial.ShareInterstitialActivity"
+              android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"
+              android:windowSoftInputMode="adjustResize" />
+
     <activity android:name=".sharing.ShareActivity"
               android:theme="@style/Theme.Signal.DayNight.NoActionBar"
               android:excludeFromRecents="true"
               android:launchMode="singleTask"
               android:taskAffinity=""
-              android:noHistory="true"
               android:windowSoftInputMode="stateHidden"
               android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize">
         <intent-filter>
@@ -225,6 +227,17 @@
             <category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
         </intent-filter>
 
+        <meta-data android:name="com.sec.minimode.icon.portrait.normal"
+                   android:resource="@mipmap/ic_launcher" />
+        <meta-data android:name="com.sec.minimode.icon.landscape.normal"
+                   android:resource="@mipmap/ic_launcher" />
+
+    </activity-alias>
+
+    <activity android:name=".deeplinks.DeepLinkEntryActivity"
+              android:noHistory="true"
+              android:theme="@style/Signal.Transparent">
+
         <intent-filter>
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.DEFAULT" />
@@ -242,12 +255,16 @@
                   android:host="signal.group"/>
         </intent-filter>
 
-        <meta-data android:name="com.sec.minimode.icon.portrait.normal"
-                   android:resource="@mipmap/ic_launcher" />
-        <meta-data android:name="com.sec.minimode.icon.landscape.normal"
-                   android:resource="@mipmap/ic_launcher" />
-
-    </activity-alias>
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https"
+                  android:host="signal.tube" />
+            <data android:scheme="sgnl"
+                  android:host="signal.tube" />
+        </intent-filter>
+    </activity>
 
     <activity android:name=".conversation.ConversationActivity"
               android:windowSoftInputMode="stateUnchanged"
@@ -258,6 +275,11 @@
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value="org.thoughtcrime.securesms.MainActivity" />
     </activity>
+
+    <activity android:name=".conversation.BubbleConversationActivity"
+              android:theme="@style/Signal.DayNight"
+              android:allowEmbedded="true"
+              android:resizeableActivity="true" />
 
     <activity android:name=".longmessage.LongMessageActivity" />
 
@@ -270,14 +292,9 @@
               android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize" />
 
     <activity android:name=".messagedetails.MessageDetailsActivity"
-              android:label="@string/AndroidManifest__message_details"
               android:windowSoftInputMode="stateHidden"
               android:launchMode="singleTask"
               android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"/>
-
-    <activity android:name=".groups.ui.pendingmemberinvites.PendingMemberInvitesActivity"
-              android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"
-              android:theme="@style/Theme.Signal.DayNight.NoActionBar" />
 
     <activity android:name=".groups.ui.invitesandrequests.ManagePendingAndRequestingMembersActivity"
               android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize|uiMode"
@@ -342,12 +359,33 @@
               android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"/>
 
     <activity android:name=".ApplicationPreferencesActivity"
-              android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize">
+              android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"
+              android:windowSoftInputMode="adjustResize">
         <intent-filter>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.NOTIFICATION_PREFERENCES" />
         </intent-filter>
     </activity>
+
+        <activity android:name=".wallpaper.ChatWallpaperActivity"
+                  android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"
+                  android:windowSoftInputMode="stateAlwaysHidden">
+        </activity>
+
+        <activity android:name=".wallpaper.ChatWallpaperPreviewActivity"
+            android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"
+            android:windowSoftInputMode="stateAlwaysHidden">
+        </activity>
+
+        <activity android:name=".devicetransfer.olddevice.OldDeviceTransferActivity"
+            android:theme="@style/TextSecure.LightRegistrationTheme"
+            android:launchMode="singleTask"
+            android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"/>
+
+        <activity android:name=".devicetransfer.olddevice.OldDeviceExitActivity"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"/>
 
     <activity android:name=".registration.RegistrationNavigationActivity"
               android:launchMode="singleTask"
@@ -373,7 +411,6 @@
                android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"/>
 
     <activity android:name=".logsubmit.SubmitDebugLogActivity"
-              android:label="@string/AndroidManifest__log_submit"
               android:windowSoftInputMode="stateHidden"
               android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"/>
 
@@ -456,6 +493,14 @@
               android:theme="@style/TextSecure.LightRegistrationTheme"
               android:windowSoftInputMode="stateVisible|adjustResize" />
 
+    <activity android:name=".profiles.manage.ManageProfileActivity"
+              android:theme="@style/TextSecure.LightTheme"
+              android:windowSoftInputMode="stateVisible|adjustResize" />
+
+    <activity android:name=".payments.preferences.PaymentsActivity"
+            android:theme="@style/TextSecure.LightRegistrationTheme"
+            android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"/>
+
     <activity android:name=".lock.v2.CreateKbsPinActivity"
             android:theme="@style/TextSecure.LightRegistrationTheme"
             android:windowSoftInputMode="adjustResize"
@@ -466,17 +511,11 @@
             android:windowSoftInputMode="adjustResize"
             android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"/>
 
-    <activity android:name=".ClearProfileAvatarActivity"
-            android:theme="@style/Theme.AppCompat.Dialog.Alert"
-            android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"
-            android:icon="@drawable/clear_profile_avatar"
-            android:label="@string/AndroidManifest_remove_photo">
-
-        <intent-filter>
-            <action android:name="org.thoughtcrime.securesms.action.CLEAR_PROFILE_PHOTO"/>
-            <category android:name="android.intent.category.DEFAULT"/>
-        </intent-filter>
-    </activity>
+    <activity android:name=".ClearAvatarPromptActivity"
+              android:theme="@style/Theme.AppCompat.Dialog.Alert"
+              android:icon="@drawable/clear_profile_avatar"
+              android:label="@string/AndroidManifest_remove_photo"
+              android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"/>
 
     <activity android:name=".contacts.TurnOffContactJoinedNotificationsActivity"
               android:theme="@style/Theme.AppCompat.Dialog.Alert" />
@@ -511,7 +550,6 @@
 
     <activity android:name=".MainActivity"
               android:theme="@style/Theme.Signal.DayNight.NoActionBar"
-              android:launchMode="singleTask"
               android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize" />
 
     <activity android:name=".pin.PinRestoreActivity"
@@ -538,7 +576,16 @@
               android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize|uiMode"
               android:launchMode="singleTask" />
 
-    <service android:enabled="true" android:name=".service.WebRtcCallService"/>
+    <activity android:name=".wallpaper.crop.WallpaperImageSelectionActivity"
+              android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"
+              android:theme="@style/TextSecure.FullScreenMedia" />
+
+    <activity android:name=".wallpaper.crop.WallpaperCropActivity"
+              android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"
+              android:screenOrientation="portrait"
+              android:theme="@style/Theme.Signal.WallpaperCropper" />
+
+    <service android:enabled="true" android:name=".service.webrtc.WebRtcCallService"/>
     <service android:enabled="true" android:name=".service.ApplicationMigrationService"/>
     <service android:enabled="true" android:exported="false" android:name=".service.KeyCachingService"/>
     <service android:enabled="true" android:name=".messages.IncomingMessageObserver$ForegroundService"/>
@@ -669,6 +716,8 @@
 
     <receiver android:name=".service.TrimThreadsByDateManager$TrimThreadsByDateAlarm" />
 
+    <receiver android:name=".payments.backup.phrase.ClearClipboardAlarmReceiver" />
+
     <provider android:name=".providers.PartProvider"
               android:grantUriPermissions="true"
               android:exported="false"
@@ -695,10 +744,6 @@
 
     <provider android:name=".database.DatabaseContentProviders$Conversation"
               android:authorities="${applicationId}.database.conversation"
-              android:exported="false" />
-
-    <provider android:name=".database.DatabaseContentProviders$ConversationList"
-              android:authorities="${applicationId}.database.conversationlist"
               android:exported="false" />
 
     <provider android:name=".database.DatabaseContentProviders$Attachment"
@@ -735,6 +780,13 @@
     <receiver android:name=".service.RotateSenderCertificateListener">
         <intent-filter>
             <action android:name="android.intent.action.BOOT_COMPLETED" />
+        </intent-filter>
+    </receiver>
+
+    <receiver android:name=".messageprocessingalarm.MessageProcessReceiver">
+        <intent-filter>
+            <action android:name="android.intent.action.BOOT_COMPLETED" />
+            <action android:name="org.thoughtcrime.securesms.action.PROCESS_MESSAGES" />
         </intent-filter>
     </receiver>
 
@@ -802,13 +854,6 @@
     </receiver>
 
     <uses-library android:name="org.apache.http.legacy" android:required="false"/>
-
-    <uses-library android:name="com.sec.android.app.multiwindow" android:required="false"/>
-    <meta-data android:name="com.sec.android.support.multiwindow" android:value="true" />
-    <meta-data android:name="com.sec.android.multiwindow.DEFAULT_SIZE_W" android:value="632.0dip" />
-    <meta-data android:name="com.sec.android.multiwindow.DEFAULT_SIZE_H" android:value="598.0dip" />
-    <meta-data android:name="com.sec.android.multiwindow.MINIMUM_SIZE_W" android:value="632.0dip" />
-    <meta-data android:name="com.sec.android.multiwindow.MINIMUM_SIZE_H" android:value="598.0dip" />
 
 </application>
 </manifest>

@@ -1,11 +1,5 @@
 package org.thoughtcrime.securesms.jobs;
 
-import org.thoughtcrime.securesms.database.MessageDatabase;
-import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
-import org.thoughtcrime.securesms.jobmanager.Data;
-import org.thoughtcrime.securesms.jobmanager.Job;
-import org.thoughtcrime.securesms.logging.Log;
-
 import androidx.annotation.NonNull;
 
 import com.google.android.mms.pdu_alt.GenericPdu;
@@ -13,8 +7,12 @@ import com.google.android.mms.pdu_alt.NotificationInd;
 import com.google.android.mms.pdu_alt.PduHeaders;
 import com.google.android.mms.pdu_alt.PduParser;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.database.DatabaseFactory;
-import org.thoughtcrime.securesms.database.MmsDatabase;
+import org.thoughtcrime.securesms.database.MessageDatabase;
+import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
+import org.thoughtcrime.securesms.jobmanager.Data;
+import org.thoughtcrime.securesms.jobmanager.Job;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.util.Base64;
 import org.thoughtcrime.securesms.util.Util;
@@ -26,7 +24,7 @@ public class MmsReceiveJob extends BaseJob {
 
   public static final String KEY = "MmsReceiveJob";
 
-  private static final String TAG = MmsReceiveJob.class.getSimpleName();
+  private static final String TAG = Log.tag(MmsReceiveJob.class);
 
   private static final String KEY_DATA            = "data";
   private static final String KEY_SUBSCRIPTION_ID = "subscription_id";

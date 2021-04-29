@@ -5,25 +5,24 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
-import androidx.annotation.NonNull;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.SmsManager;
 
-import org.thoughtcrime.securesms.database.Database;
+import androidx.annotation.NonNull;
+
+import org.signal.core.util.logging.Log;
+import org.thoughtcrime.securesms.database.DatabaseFactory;
 import org.thoughtcrime.securesms.database.MessageDatabase;
+import org.thoughtcrime.securesms.database.NoSuchMessageException;
+import org.thoughtcrime.securesms.database.model.SmsMessageRecord;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.jobmanager.Data;
 import org.thoughtcrime.securesms.jobmanager.Job;
 import org.thoughtcrime.securesms.jobmanager.impl.NetworkOrCellServiceConstraint;
-
-import org.thoughtcrime.securesms.database.DatabaseFactory;
-import org.thoughtcrime.securesms.database.NoSuchMessageException;
-import org.thoughtcrime.securesms.database.SmsDatabase;
-import org.thoughtcrime.securesms.database.model.SmsMessageRecord;
+import org.thoughtcrime.securesms.phonenumbers.NumberUtil;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.service.SmsDeliveryListener;
 import org.thoughtcrime.securesms.transport.UndeliverableMessageException;
-import org.thoughtcrime.securesms.phonenumbers.NumberUtil;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
 
 import java.util.ArrayList;
@@ -32,7 +31,7 @@ public class SmsSendJob extends SendJob {
 
   public static final String KEY = "SmsSendJob";
 
-  private static final String TAG              = SmsSendJob.class.getSimpleName();
+  private static final String TAG              = Log.tag(SmsSendJob.class);
   private static final int    MAX_ATTEMPTS     = 15;
   private static final String KEY_MESSAGE_ID   = "message_id";
   private static final String KEY_RUN_ATTEMPT  = "run_attempt";
@@ -73,7 +72,7 @@ public class SmsSendJob extends SendJob {
   }
 
   @Override
-  public void onSend() throws NoSuchMessageException, TooManyRetriesException {
+  public void onSend() throws NoSuchMessageException, TooManyRetriesException, UndeliverableMessageException {
     if (runAttempt >= MAX_ATTEMPTS) {
       warn(TAG, "Hit the retry limit. Failing.");
       throw new TooManyRetriesException();
@@ -85,6 +84,10 @@ public class SmsSendJob extends SendJob {
     if (!record.isPending() && !record.isFailed()) {
       warn(TAG, "Message " + messageId + " was already sent. Ignoring.");
       return;
+    }
+
+    if (!record.getRecipient().hasSmsAddress()) {
+      throw new UndeliverableMessageException("Recipient didn't have an SMS address! " + record.getRecipient().getId());
     }
 
     try {

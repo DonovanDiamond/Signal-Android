@@ -15,6 +15,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.uast.UCallExpression;
 import org.jetbrains.uast.UExpression;
 import org.jetbrains.uast.java.JavaUSimpleNameReferenceExpression;
+import org.jetbrains.uast.kotlin.KotlinUQualifiedReferenceExpression;
+import org.jetbrains.uast.kotlin.KotlinUSimpleReferenceExpression;
 
 import java.util.Arrays;
 import java.util.List;
@@ -60,15 +62,20 @@ public final class SignalLogDetector extends Detector implements Detector.UastSc
       context.report(LOG_NOT_SIGNAL, call, context.getLocation(call), "Using 'android.util.Log' instead of a Signal Logger", fix);
     }
 
+    if (evaluator.isMemberInClass(method, "org.signal.glide.Log")) {
+      LintFix fix = quickFixIssueLog(call);
+      context.report(LOG_NOT_SIGNAL, call, context.getLocation(call), "Using 'org.signal.glide.Log' instead of a Signal Logger", fix);
+    }
+
     if (evaluator.isMemberInClass(method, "org.whispersystems.libsignal.logging.Log")) {
       LintFix fix = quickFixIssueLog(call);
       context.report(LOG_NOT_APP, call, context.getLocation(call), "Using Signal server logger instead of app level Logger", fix);
     }
 
-    if (evaluator.isMemberInClass(method, "org.thoughtcrime.securesms.logging.Log")) {
+    if (evaluator.isMemberInClass(method, "org.signal.core.util.logging.Log")) {
       List<UExpression> arguments  = call.getValueArguments();
       UExpression       tag        = arguments.get(0);
-      if (!(tag instanceof JavaUSimpleNameReferenceExpression)) {
+      if (!(tag instanceof JavaUSimpleNameReferenceExpression || tag instanceof KotlinUSimpleReferenceExpression || tag instanceof KotlinUQualifiedReferenceExpression)) {
         context.report(INLINE_TAG, call, context.getLocation(call), "Not using a tag constant");
       }
     }
@@ -79,7 +86,7 @@ public final class SignalLogDetector extends Detector implements Detector.UastSc
     String            methodName = logCall.getMethodName();
     UExpression       tag        = arguments.get(0);
 
-    String fixSource = "org.thoughtcrime.securesms.logging.Log.";
+    String fixSource = "org.signal.core.util.logging.Log.";
 
     switch (arguments.size()) {
       case 2:

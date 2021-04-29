@@ -20,6 +20,8 @@ import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import com.google.i18n.phonenumbers.Phonenumber;
 import com.google.i18n.phonenumbers.ShortNumberInfo;
 
+import org.signal.core.util.StreamUtil;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.crypto.AttachmentSecret;
 import org.thoughtcrime.securesms.crypto.ClassicDecryptingPartInputStream;
 import org.thoughtcrime.securesms.crypto.MasterCipher;
@@ -37,7 +39,6 @@ import org.thoughtcrime.securesms.database.SmsDatabase;
 import org.thoughtcrime.securesms.database.ThreadDatabase;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.groups.GroupId;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.migrations.LegacyMigrationJob;
 import org.thoughtcrime.securesms.permissions.Permissions;
 import org.thoughtcrime.securesms.phonenumbers.NumberUtil;
@@ -116,7 +117,7 @@ public class ClassicOpenHelper extends SQLiteOpenHelper {
   private static final int MORE_RECIPIENT_FIELDS                           = 47;
   private static final int DATABASE_VERSION                                = 47;
 
-  private static final String TAG = ClassicOpenHelper.class.getSimpleName();
+  private static final String TAG = Log.tag(ClassicOpenHelper.class);
 
   private final Context context;
 
@@ -330,7 +331,7 @@ public class ClassicOpenHelper extends SQLiteOpenHelper {
               if (encrypted) is = ClassicDecryptingPartInputStream.createFor(attachmentSecret, dataFile);
               else           is = new FileInputStream(dataFile);
 
-              body = (body == null) ? Util.readFullyAsString(is) : body + " " + Util.readFullyAsString(is);
+              body = (body == null) ? StreamUtil.readFullyAsString(is) : body + " " + StreamUtil.readFullyAsString(is);
 
               //noinspection ResultOfMethodCallIgnored
               dataFile.delete();
@@ -1392,7 +1393,7 @@ public class ClassicOpenHelper extends SQLiteOpenHelper {
 
   private static class NumberMigrator {
 
-    private static final String TAG = NumberMigrator.class.getSimpleName();
+    private static final String TAG = Log.tag(NumberMigrator.class);
 
     private static final Set<String> SHORT_COUNTRIES = new HashSet<String>() {{
       add("NU");

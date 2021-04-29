@@ -134,6 +134,13 @@ Your platform might also have its own preferred way of installing Docker. E.g. U
 
 In the following sections we will assume that your Docker installation works without issues. So after installing, please make sure that everything is running smoothly before continuing.
 
+### Configuring Docker runtime memory
+
+Docker seems to require at least 5GB runtime memory to be able to build the APK successfully. Docker behaves differently on each platform - please consult Docker documentation for the platform of choice to configure the runtime memory settings.
+
+ * https://docs.docker.com/config/containers/resource_constraints/
+ * OS X https://docs.docker.com/docker-for-mac/#resources
+ * Windows https://docs.docker.com/docker-for-windows/#resources
 
 ## Building a Docker image for Signal
 First, you need to pull down the source for Signal-Android, which contains everything you need to build the project, including the `Dockerfile`. The `Dockerfile` contains instructions on how to automatically build a Docker image for Signal. It's located in the `reproducible-builds` directory of the repository. To get it, clone the project:
@@ -195,7 +202,7 @@ cd ~/reproducible-signal/signal-source
 To build with the docker image you just built (`signal-android`), run:
 
 ```
-docker run --rm -v $(pwd):/project -w /project signal-android ./gradlew clean assemblePlayRelease
+docker run --rm -v $(pwd):/project -w /project signal-android ./gradlew clean assemblePlayProdRelease
 ```
 
 This will take a few minutes :sleeping:
@@ -221,7 +228,7 @@ And run the diff script to compare (updating the filenames for your specific ver
 
 ```bash
 python3 reproducible-builds/apkdiff/apkdiff.py \
-        build/outputs/apk/play/release/*play-$abi-release-unsigned*.apk \
+        app/build/outputs/apk/playProd/release/*play-prod-$abi-release-unsigned*.apk \
         ../apk-from-google-play-store/Signal-5.0.0.apk
 ```
 

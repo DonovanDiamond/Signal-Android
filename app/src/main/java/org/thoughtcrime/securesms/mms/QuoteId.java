@@ -7,8 +7,8 @@ import androidx.annotation.Nullable;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.database.model.MessageRecord;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.recipients.RecipientId;
 
@@ -17,7 +17,7 @@ import org.thoughtcrime.securesms.recipients.RecipientId;
  */
 public class QuoteId {
 
-  private static final String TAG = QuoteId.class.getSimpleName();
+  private static final String TAG = Log.tag(QuoteId.class);
 
   private static final String ID                 = "id";
   private static final String AUTHOR_DEPRECATED  = "author";

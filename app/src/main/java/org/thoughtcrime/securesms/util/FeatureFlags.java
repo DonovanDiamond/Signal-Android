@@ -1,5 +1,6 @@
 package org.thoughtcrime.securesms.util;
 
+import android.os.Build;
 import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
@@ -9,13 +10,13 @@ import com.annimon.stream.Stream;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.BuildConfig;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.groups.SelectionLimits;
-import org.thoughtcrime.securesms.jobs.RefreshAttributesJob;
 import org.thoughtcrime.securesms.jobs.RemoteConfigRefreshJob;
 import org.thoughtcrime.securesms.keyvalue.SignalStore;
-import org.thoughtcrime.securesms.logging.Log;
+import org.thoughtcrime.securesms.messageprocessingalarm.MessageProcessReceiver;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -49,45 +50,71 @@ public final class FeatureFlags {
 
   private static final long FETCH_INTERVAL = TimeUnit.HOURS.toMillis(2);
 
-  private static final String USERNAMES                    = "android.usernames";
-  private static final String GROUPS_V2_JOIN_VERSION       = "android.groupsv2.joinVersion";
-  private static final String GROUPS_V2_LINKS_VERSION      = "android.groupsv2.manageGroupLinksVersion";
-  private static final String GROUPS_V2_RECOMMENDED_LIMIT  = "global.groupsv2.maxGroupSize";
-  private static final String GROUPS_V2_HARD_LIMIT         = "global.groupsv2.groupSizeHardLimit";
-  private static final String INTERNAL_USER                = "android.internalUser";
-  private static final String VERIFY_V2                    = "android.verifyV2";
-  private static final String PHONE_NUMBER_PRIVACY_VERSION = "android.phoneNumberPrivacyVersion";
-  private static final String CLIENT_EXPIRATION            = "android.clientExpiration";
-  public  static final String RESEARCH_MEGAPHONE_1         = "research.megaphone.1";
-  public  static final String DONATE_MEGAPHONE             = "android.donate";
-  private static final String VIEWED_RECEIPTS              = "android.viewed.receipts";
-  private static final String MAX_ENVELOPE_SIZE            = "android.maxEnvelopeSize";
-  private static final String GROUP_CALLING_VERSION        = "android.groupsv2.callingVersion";
-  private static final String GV1_AUTO_MIGRATE             = "android.groupsV1Migration.auto";
-  private static final String GV1_MANUAL_MIGRATE           = "android.groupsV1Migration.manual";
-  private static final String GV1_FORCED_MIGRATE           = "android.groupsV1Migration.forced";
+  private static final String PAYMENTS_KILL_SWITCH              = "android.payments.kill";
+  private static final String USERNAMES                         = "android.usernames";
+  private static final String GROUPS_V2_RECOMMENDED_LIMIT       = "global.groupsv2.maxGroupSize";
+  private static final String GROUPS_V2_HARD_LIMIT              = "global.groupsv2.groupSizeHardLimit";
+  private static final String GROUP_NAME_MAX_LENGTH             = "global.groupsv2.maxNameLength";
+  private static final String INTERNAL_USER                     = "android.internalUser";
+  private static final String VERIFY_V2                         = "android.verifyV2";
+  private static final String PHONE_NUMBER_PRIVACY_VERSION      = "android.phoneNumberPrivacyVersion";
+  private static final String CLIENT_EXPIRATION                 = "android.clientExpiration";
+  public  static final String DONATE_MEGAPHONE                  = "android.donate";
+  private static final String VIEWED_RECEIPTS                   = "android.viewed.receipts";
+  private static final String GV1_FORCED_MIGRATE                = "android.groupsV1Migration.forced.2";
+  private static final String SEND_VIEWED_RECEIPTS              = "android.sendViewedReceipts";
+  private static final String CUSTOM_VIDEO_MUXER                = "android.customVideoMuxer";
+  private static final String CDS_REFRESH_INTERVAL              = "cds.syncInterval.seconds";
+  private static final String AUTOMATIC_SESSION_RESET           = "android.automaticSessionReset.2";
+  private static final String AUTOMATIC_SESSION_INTERVAL        = "android.automaticSessionResetInterval";
+  private static final String DEFAULT_MAX_BACKOFF               = "android.defaultMaxBackoff";
+  private static final String SERVER_ERROR_MAX_BACKOFF          = "android.serverErrorMaxBackoff";
+  private static final String OKHTTP_AUTOMATIC_RETRY            = "android.okhttpAutomaticRetry";
+  private static final String SHARE_SELECTION_LIMIT             = "android.share.limit";
+  private static final String ANIMATED_STICKER_MIN_MEMORY       = "android.animatedStickerMinMemory";
+  private static final String ANIMATED_STICKER_MIN_TOTAL_MEMORY = "android.animatedStickerMinTotalMemory";
+  private static final String MESSAGE_PROCESSOR_ALARM_INTERVAL  = "android.messageProcessor.alarmIntervalMins";
+  private static final String MESSAGE_PROCESSOR_DELAY           = "android.messageProcessor.foregroundDelayMs";
+  private static final String NOTIFICATION_REWRITE              = "android.notificationRewrite";
+  private static final String MP4_GIF_SEND_SUPPORT              = "android.mp4GifSendSupport";
 
   /**
    * We will only store remote values for flags in this set. If you want a flag to be controllable
    * remotely, place it in here.
    */
-  private static final Set<String> REMOTE_CAPABLE = SetUtil.newHashSet(
+  @VisibleForTesting
+  static final Set<String> REMOTE_CAPABLE = SetUtil.newHashSet(
+      PAYMENTS_KILL_SWITCH,
       GROUPS_V2_RECOMMENDED_LIMIT,
       GROUPS_V2_HARD_LIMIT,
-      GROUPS_V2_JOIN_VERSION,
-      GROUPS_V2_LINKS_VERSION,
       INTERNAL_USER,
       USERNAMES,
       VERIFY_V2,
       CLIENT_EXPIRATION,
-      RESEARCH_MEGAPHONE_1,
       DONATE_MEGAPHONE,
       VIEWED_RECEIPTS,
-      MAX_ENVELOPE_SIZE,
-      GV1_AUTO_MIGRATE,
-      GV1_MANUAL_MIGRATE,
       GV1_FORCED_MIGRATE,
-      GROUP_CALLING_VERSION
+      SEND_VIEWED_RECEIPTS,
+      CUSTOM_VIDEO_MUXER,
+      CDS_REFRESH_INTERVAL,
+      GROUP_NAME_MAX_LENGTH,
+      AUTOMATIC_SESSION_RESET,
+      AUTOMATIC_SESSION_INTERVAL,
+      DEFAULT_MAX_BACKOFF,
+      SERVER_ERROR_MAX_BACKOFF,
+      OKHTTP_AUTOMATIC_RETRY,
+      SHARE_SELECTION_LIMIT,
+      ANIMATED_STICKER_MIN_MEMORY,
+      ANIMATED_STICKER_MIN_TOTAL_MEMORY,
+      MESSAGE_PROCESSOR_ALARM_INTERVAL,
+      MESSAGE_PROCESSOR_DELAY,
+      NOTIFICATION_REWRITE,
+      MP4_GIF_SEND_SUPPORT
+  );
+
+  @VisibleForTesting
+  static final Set<String> NOT_REMOTE_CAPABLE = SetUtil.newHashSet(
+      PHONE_NUMBER_PRIVACY_VERSION
   );
 
   /**
@@ -97,7 +124,8 @@ public final class FeatureFlags {
    * an addition to this map.
    */
   @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
-  private static final Map<String, Object> FORCED_VALUES = new HashMap<String, Object>() {{
+  @VisibleForTesting
+  static final Map<String, Object> FORCED_VALUES = new HashMap<String, Object>() {{
   }};
 
   /**
@@ -107,19 +135,35 @@ public final class FeatureFlags {
    * will be updated arbitrarily at runtime. This will make values more responsive, but also places
    * more burden on the reader to ensure that the app experience remains consistent.
    */
-  private static final Set<String> HOT_SWAPPABLE = SetUtil.newHashSet(
-      GROUPS_V2_JOIN_VERSION,
+  @VisibleForTesting
+  static final Set<String> HOT_SWAPPABLE = SetUtil.newHashSet(
       VERIFY_V2,
       CLIENT_EXPIRATION,
-      MAX_ENVELOPE_SIZE
+      CUSTOM_VIDEO_MUXER,
+      CDS_REFRESH_INTERVAL,
+      GROUP_NAME_MAX_LENGTH,
+      AUTOMATIC_SESSION_RESET,
+      AUTOMATIC_SESSION_INTERVAL,
+      DEFAULT_MAX_BACKOFF,
+      SERVER_ERROR_MAX_BACKOFF,
+      OKHTTP_AUTOMATIC_RETRY,
+      SHARE_SELECTION_LIMIT,
+      ANIMATED_STICKER_MIN_MEMORY,
+      ANIMATED_STICKER_MIN_TOTAL_MEMORY,
+      MESSAGE_PROCESSOR_ALARM_INTERVAL,
+      MESSAGE_PROCESSOR_DELAY,
+      GV1_FORCED_MIGRATE,
+      NOTIFICATION_REWRITE,
+      MP4_GIF_SEND_SUPPORT
   );
 
   /**
    * Flags in this set will stay true forever once they receive a true value from a remote config.
    */
-  private static final Set<String> STICKY = SetUtil.newHashSet(
+  @VisibleForTesting
+  static final Set<String> STICKY = SetUtil.newHashSet(
       VERIFY_V2
-    );
+  );
 
   /**
    * Listeners that are called when the value in {@link #REMOTE_VALUES} changes. That means that
@@ -133,7 +177,7 @@ public final class FeatureFlags {
    * desired test state.
    */
   private static final Map<String, OnFlagChange> FLAG_CHANGE_LISTENERS = new HashMap<String, OnFlagChange>() {{
-    put(GV1_AUTO_MIGRATE, change -> ApplicationDependencies.getJobManager().add(new RefreshAttributesJob()));
+    put(MESSAGE_PROCESSOR_ALARM_INTERVAL, change -> MessageProcessReceiver.startOrUpdateAlarm(ApplicationDependencies.getApplication()));
   }};
 
   private static final Map<String, Object> REMOTE_VALUES = new TreeMap<>();
@@ -186,11 +230,6 @@ public final class FeatureFlags {
     return getBoolean(USERNAMES, false);
   }
 
-  /** Allow creation and managing of group links. */
-  public static boolean groupsV2manageGroupLinks() {
-    return getVersionFlag(GROUPS_V2_LINKS_VERSION) == VersionFlag.ON;
-  }
-
   /**
    * Maximum number of members allowed in a group.
    */
@@ -199,29 +238,9 @@ public final class FeatureFlags {
                                getInteger(GROUPS_V2_HARD_LIMIT, 1001));
   }
 
-  /**
-   * Ability of local client to join a GV2 group.
-   * <p>
-   * You must still check GV2 capabilities to respect linked devices.
-   */
-  public static GroupJoinStatus clientLocalGroupJoinStatus() {
-    switch (getVersionFlag(GROUPS_V2_JOIN_VERSION)) {
-      case ON_IN_FUTURE_VERSION: return GroupJoinStatus.UPDATE_TO_JOIN;
-      case ON                  : return GroupJoinStatus.LOCAL_CAN_JOIN;
-      case OFF                 :
-      default                  : return GroupJoinStatus.COMING_SOON;
-    }
-  }
-
-  public enum GroupJoinStatus {
-    /** No version of the client that can join V2 groups by link is in production. */
-    COMING_SOON,
-
-    /** A newer version of the client is in production that will allow joining via GV2 group links. */
-    UPDATE_TO_JOIN,
-
-    /** This version of the client allows joining via GV2 group links. */
-    LOCAL_CAN_JOIN
+  /** Payments Support */
+  public static boolean payments() {
+    return !getBoolean(PAYMENTS_KILL_SWITCH, false);
   }
 
   /** Internal testing extensions. */
@@ -237,11 +256,6 @@ public final class FeatureFlags {
   /** The raw client expiration JSON string. */
   public static String clientExpiration() {
     return getString(CLIENT_EXPIRATION, null);
-  }
-
-  /** The raw research megaphone CSV string */
-  public static String researchMegaphone() {
-    return getString(RESEARCH_MEGAPHONE_1, "");
   }
 
   /** The raw donate megaphone CSV string */
@@ -262,29 +276,78 @@ public final class FeatureFlags {
     return getBoolean(VIEWED_RECEIPTS, false);
   }
 
-  /** The max size envelope that is allowed to be sent. */
-  public static int maxEnvelopeSize() {
-    return getInteger(MAX_ENVELOPE_SIZE, 0);
-  }
-
-  /** Whether or not group calling is enabled. */
-  public static boolean groupCalling() {
-    return getVersionFlag(GROUP_CALLING_VERSION) == VersionFlag.ON;
-  }
-
-  /** Whether or not auto-migration from GV1->GV2 is enabled. */
-  public static boolean groupsV1AutoMigration() {
-    return getBoolean(GV1_AUTO_MIGRATE, false);
-  }
-
-  /** Whether or not manual migration from GV1->GV2 is enabled. */
-  public static boolean groupsV1ManualMigration() {
-    return getBoolean(GV1_MANUAL_MIGRATE, false) && groupsV1AutoMigration();
-  }
-
   /** Whether or not forced migration from GV1->GV2 is enabled. */
   public static boolean groupsV1ForcedMigration() {
-    return getBoolean(GV1_FORCED_MIGRATE, false) && groupsV1ManualMigration() && groupsV1AutoMigration();
+    return getBoolean(GV1_FORCED_MIGRATE, false);
+  }
+
+  /** Whether or not to send viewed receipts. */
+  public static boolean sendViewedReceipts() {
+    return getBoolean(SEND_VIEWED_RECEIPTS, false);
+  }
+
+  /** Whether to use the custom streaming muxer or built in android muxer. */
+  public static boolean useStreamingVideoMuxer() {
+    return getBoolean(CUSTOM_VIDEO_MUXER, false);
+  }
+
+  /** The time in between routine CDS refreshes, in seconds. */
+  public static int cdsRefreshIntervalSeconds() {
+    return getInteger(CDS_REFRESH_INTERVAL, (int) TimeUnit.HOURS.toSeconds(48));
+  }
+
+  public static @NonNull SelectionLimits shareSelectionLimit() {
+    int limit = getInteger(SHARE_SELECTION_LIMIT, 5);
+    return new SelectionLimits(limit, limit);
+  }
+
+  /** The maximum number of grapheme */
+  public static int getMaxGroupNameGraphemeLength() {
+    return Math.max(32, getInteger(GROUP_NAME_MAX_LENGTH, -1));
+  }
+
+  /** Whether or not to allow automatic session resets. */
+  public static boolean automaticSessionReset() {
+    return getBoolean(AUTOMATIC_SESSION_RESET, true);
+  }
+
+  /** How often we allow an automatic session reset. */
+  public static int automaticSessionResetIntervalSeconds() {
+    return getInteger(AUTOMATIC_SESSION_RESET, (int) TimeUnit.HOURS.toSeconds(1));
+  }
+
+  /** The default maximum backoff for jobs. */
+  public static long getDefaultMaxBackoff() {
+    return TimeUnit.SECONDS.toMillis(getInteger(DEFAULT_MAX_BACKOFF, 60));
+  }
+
+  /** The maximum backoff for network jobs that hit a 5xx error. */
+  public static long getServerErrorMaxBackoff() {
+    return TimeUnit.SECONDS.toMillis(getInteger(SERVER_ERROR_MAX_BACKOFF, (int) TimeUnit.HOURS.toSeconds(6)));
+  }
+
+  /** Whether or not to allow automatic retries from OkHttp */
+  public static boolean okHttpAutomaticRetry() {
+    return getBoolean(OKHTTP_AUTOMATIC_RETRY, true);
+  }
+
+  /** The minimum memory class required for rendering animated stickers in the keyboard and such */
+  public static int animatedStickerMinimumMemoryClass() {
+    return getInteger(ANIMATED_STICKER_MIN_MEMORY, 193);
+  }
+
+  /** The minimum total memory for rendering animated stickers in the keyboard and such */
+  public static int animatedStickerMinimumTotalMemoryMb() {
+    return getInteger(ANIMATED_STICKER_MIN_TOTAL_MEMORY, (int) ByteUnit.GIGABYTES.toMegabytes(3));
+  }
+
+  /** Whether or not to use the new notification system. */
+  public static boolean useNewNotificationSystem() {
+    return Build.VERSION.SDK_INT >= 26 || getBoolean(NOTIFICATION_REWRITE, false);
+  }
+
+  public static boolean mp4GifSendSupport() {
+    return getBoolean(MP4_GIF_SEND_SUPPORT, false);
   }
 
   /** Only for rendering debug info. */
@@ -415,6 +478,18 @@ public final class FeatureFlags {
     } else {
       return VersionFlag.ON_IN_FUTURE_VERSION;
     }
+  }
+
+  public static long getBackgroundMessageProcessInterval() {
+    int delayMinutes = getInteger(MESSAGE_PROCESSOR_ALARM_INTERVAL, (int) TimeUnit.HOURS.toMinutes(6));
+    return TimeUnit.MINUTES.toMillis(delayMinutes);
+  }
+
+  /**
+   * How long before a "Checking messages" foreground notification is shown to the user.
+   */
+  public static long getBackgroundMessageProcessForegroundDelay() {
+    return getInteger(MESSAGE_PROCESSOR_DELAY, 300);
   }
 
   private enum VersionFlag {

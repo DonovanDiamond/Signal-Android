@@ -2,14 +2,16 @@ package org.thoughtcrime.securesms.service.webrtc;
 
 import androidx.annotation.NonNull;
 
+import org.signal.core.util.logging.Log;
 import org.signal.ringrtc.CallException;
 import org.signal.ringrtc.CallManager;
+import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.events.WebRtcViewModel;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.ringrtc.CallState;
 import org.thoughtcrime.securesms.ringrtc.Camera;
 import org.thoughtcrime.securesms.ringrtc.RemotePeer;
 import org.thoughtcrime.securesms.service.webrtc.state.WebRtcServiceState;
+import org.thoughtcrime.securesms.util.NetworkUtil;
 import org.thoughtcrime.securesms.webrtc.locks.LockManager;
 
 import static org.thoughtcrime.securesms.webrtc.CallNotificationBuilder.TYPE_ESTABLISHED;
@@ -36,8 +38,8 @@ public class CallSetupActionProcessorDelegate extends WebRtcActionProcessor {
 
     RemotePeer activePeer = currentState.getCallInfoState().requireActivePeer();
 
+    ApplicationDependencies.getAppForegroundObserver().removeListener(webRtcInteractor.getForegroundListener());
     webRtcInteractor.startAudioCommunication(activePeer.getState() == CallState.REMOTE_RINGING);
-    webRtcInteractor.setWantsBluetoothConnection(true);
 
     activePeer.connected();
 
@@ -52,16 +54,21 @@ public class CallSetupActionProcessorDelegate extends WebRtcActionProcessor {
                                .changeCallInfoState()
                                .callState(WebRtcViewModel.State.CALL_CONNECTED)
                                .callConnectedTime(System.currentTimeMillis())
+                               .commit()
+                               .changeLocalDeviceState()
+                               .wantsBluetooth(true)
                                .build();
 
-    webRtcInteractor.unregisterPowerButtonReceiver();
     webRtcInteractor.setCallInProgressNotification(TYPE_ESTABLISHED, activePeer);
+    webRtcInteractor.unregisterPowerButtonReceiver();
+    webRtcInteractor.setWantsBluetoothConnection(true);
 
     try {
       CallManager callManager = webRtcInteractor.getCallManager();
       callManager.setCommunicationMode();
       callManager.setAudioEnable(currentState.getLocalDeviceState().isMicrophoneEnabled());
       callManager.setVideoEnable(currentState.getLocalDeviceState().getCameraState().isEnabled());
+      callManager.updateBandwidthMode(NetworkUtil.getCallingBandwidthMode(context));
     } catch (CallException e) {
       return callFailure(currentState, "Enabling audio/video failed: ", e);
     }

@@ -39,14 +39,6 @@
         <item name="android:windowBackground">@drawable/dialog_background</item>
         <item name="android:textColor">@null</item>
     </style>
-
-    <style name="TextSecure.DarkTheme.FullScreenDialog">
-        <item name="android:windowAnimationStyle">@style/TextSecure.Animation.FullScreenDialog</item>
-    </style>
-
-    <style name="TextSecure.LightTheme.FullScreenDialog">
-        <item name="android:windowAnimationStyle">@style/TextSecure.Animation.FullScreenDialog</item>
-    </style>
     
     <style name="TextSecure.Animation.FullScreenDialog" parent="@android:style/Animation.Activity">
         <item name="android:windowEnterAnimation">@anim/fade_scale_in</item>
@@ -135,6 +127,11 @@
         <item name="android:colorControlNormal" tools:ignore="NewApi">@color/signal_text_primary</item>
         <item name="colorControlActivated">?colorAccent</item>
         <item name="android:colorControlActivated" tools:ignore="NewApi">?colorAccent</item>
+    </style>
+
+    <style name="Signal.Toolbar.PaymentInfoCard" parent="@style/Widget.AppCompat.ActionBar">
+        <item name="actionOverflowButtonStyle">@style/Signal.Toolbar.Overflow.PaymentCard</item>
+        <item name="android:actionOverflowButtonStyle">@style/Signal.Toolbar.Overflow.PaymentCard</item>
     </style>
 
     <style name="TextSecure.TitleTextStyle" parent="TextAppearance.AppCompat.Widget.ActionBar.Title">
@@ -374,6 +371,10 @@
         <item name="android:tint">@null</item>
     </style>
 
+    <style name="Signal.Toolbar.Overflow.PaymentCard">
+        <item name="android:tint">@color/payment_info_card_overflow_tint</item>
+    </style>
+
     <style name="TextSecure.ActionModeStyle" parent="@style/Widget.AppCompat.ActionMode">
         <item name="titleTextStyle">@style/Signal.DayNight.TitleTextStyle</item>
         <item name="theme">@style/Signal.ActionModeTheme</item>
@@ -488,6 +489,14 @@
         <item name="shapeAppearanceOverlay">@style/ShapeAppearanceOverlay.Signal.Button.Rounded</item>
     </style>
 
+    <style name="Widget.Signal.Button.Icon.Circular.Small">
+        <item name="android:layout_width">24dp</item>
+        <item name="android:layout_height">24dp</item>
+        <item name="iconSize">10dp</item>
+        <item name="android:padding">0dp</item>
+        <item name="iconGravity">textStart</item>
+    </style>
+
     <style name="ShapeAppearanceOverlay.Signal.Button.Rounded" parent="">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">50%</item>
@@ -497,5 +506,12 @@
         <item name="android:textAllCaps">false</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
+    </style>
+
+    <style name="Widget.TimeDurationPicker.Dialog">
+        <item name="durationDisplayBackground">?colorControlActivated</item>
+        <item name="textAppearanceDisplay">@style/TextAppearance.TimeDurationPicker.Display.Large.Dark</item>
+        <item name="textAppearanceUnit">@style/TextAppearance.TimeDurationPicker.Unit.Large.Dark</item>
+        <item name="android:layoutDirection">ltr</item>
     </style>
 </resources>

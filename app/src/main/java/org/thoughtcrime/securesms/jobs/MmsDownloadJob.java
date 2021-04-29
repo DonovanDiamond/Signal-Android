@@ -11,10 +11,10 @@ import com.google.android.mms.pdu_alt.PduBody;
 import com.google.android.mms.pdu_alt.PduPart;
 import com.google.android.mms.pdu_alt.RetrieveConf;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.attachments.Attachment;
 import org.thoughtcrime.securesms.attachments.UriAttachment;
 import org.thoughtcrime.securesms.contactshare.Contact;
-import org.thoughtcrime.securesms.contactshare.ContactUtil;
 import org.thoughtcrime.securesms.contactshare.VCardUtil;
 import org.thoughtcrime.securesms.database.AttachmentDatabase;
 import org.thoughtcrime.securesms.database.DatabaseFactory;
@@ -25,7 +25,6 @@ import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.groups.GroupId;
 import org.thoughtcrime.securesms.jobmanager.Data;
 import org.thoughtcrime.securesms.jobmanager.Job;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.mms.ApnUnavailableException;
 import org.thoughtcrime.securesms.mms.CompatMmsConnection;
 import org.thoughtcrime.securesms.mms.IncomingMediaMessage;
@@ -53,7 +52,7 @@ public class MmsDownloadJob extends BaseJob {
 
   public static final String KEY = "MmsDownloadJob";
 
-  private static final String TAG = MmsDownloadJob.class.getSimpleName();
+  private static final String TAG = Log.tag(MmsDownloadJob.class);
 
   private static final String KEY_MESSAGE_ID = "message_id";
   private static final String KEY_THREAD_ID  = "thread_id";
@@ -238,7 +237,7 @@ public class MmsDownloadJob extends BaseJob {
 
             attachments.add(new UriAttachment(uri, Util.toIsoString(part.getContentType()),
                             AttachmentDatabase.TRANSFER_PROGRESS_DONE,
-                            part.getData().length, name, false, false, false, null, null, null, null, null));
+                            part.getData().length, name, false, false, false, false, null, null, null, null, null));
           }
         }
       }

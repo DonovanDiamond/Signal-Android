@@ -26,6 +26,7 @@ import androidx.core.view.inputmethod.EditorInfoCompat;
 import androidx.core.view.inputmethod.InputConnectionCompat;
 import androidx.core.view.inputmethod.InputContentInfoCompat;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.TransportOption;
 import org.thoughtcrime.securesms.components.emoji.EmojiEditText;
@@ -34,14 +35,12 @@ import org.thoughtcrime.securesms.components.mention.MentionDeleter;
 import org.thoughtcrime.securesms.components.mention.MentionRendererDelegate;
 import org.thoughtcrime.securesms.components.mention.MentionValidatorWatcher;
 import org.thoughtcrime.securesms.database.model.Mention;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.recipients.RecipientId;
-import org.thoughtcrime.securesms.util.FeatureFlags;
 import org.thoughtcrime.securesms.util.StringUtil;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
-import org.thoughtcrime.securesms.util.ThemeUtil;
 
 import java.util.List;
+import java.util.Objects;
 
 import static org.thoughtcrime.securesms.database.MentionUtil.MENTION_STARTER;
 
@@ -83,17 +82,18 @@ public class ComposeText extends EmojiEditText {
   }
 
   @Override
-  protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-    super.onLayout(changed, left, top, right, bottom);
+  protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+    super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 
-    if (!TextUtils.isEmpty(hint)) {
+    if (getLayout() != null && !TextUtils.isEmpty(hint)) {
       if (!TextUtils.isEmpty(subHint)) {
-        setHint(new SpannableStringBuilder().append(ellipsizeToWidth(hint))
-                                            .append("\n")
-                                            .append(ellipsizeToWidth(subHint)));
+        setHintWithChecks(new SpannableStringBuilder().append(ellipsizeToWidth(hint))
+                                                      .append("\n")
+                                                      .append(ellipsizeToWidth(subHint)));
       } else {
-        setHint(ellipsizeToWidth(hint));
+        setHintWithChecks(ellipsizeToWidth(hint));
       }
+      super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     }
   }
 
@@ -161,14 +161,14 @@ public class ComposeText extends EmojiEditText {
     }
 
     if (this.subHint != null) {
-      super.setHint(new SpannableStringBuilder().append(ellipsizeToWidth(this.hint))
-                                                .append("\n")
-                                                .append(ellipsizeToWidth(this.subHint)));
+      setHintWithChecks(new SpannableStringBuilder().append(ellipsizeToWidth(this.hint))
+                                                    .append("\n")
+                                                    .append(ellipsizeToWidth(this.subHint)));
     } else {
-      super.setHint(ellipsizeToWidth(this.hint));
+      setHintWithChecks(ellipsizeToWidth(this.hint));
     }
 
-    super.setHint(hint);
+    setHintWithChecks(hint);
   }
 
   public void appendInvite(String invite) {
@@ -263,6 +263,14 @@ public class ComposeText extends EmojiEditText {
     addTextChangedListener(new MentionDeleter());
     mentionValidatorWatcher = new MentionValidatorWatcher();
     addTextChangedListener(mentionValidatorWatcher);
+  }
+
+  private void setHintWithChecks(@Nullable CharSequence newHint) {
+    if (getLayout() == null || Objects.equals(getHint(), newHint)) {
+      return;
+    }
+
+    setHint(newHint);
   }
 
   private boolean changeSelectionForPartialMentions(@NonNull Spanned spanned, int selectionStart, int selectionEnd) {
@@ -366,7 +374,7 @@ public class ComposeText extends EmojiEditText {
 
   private static class CommitContentListener implements InputConnectionCompat.OnCommitContentListener {
 
-    private static final String TAG = CommitContentListener.class.getSimpleName();
+    private static final String TAG = Log.tag(CommitContentListener.class);
 
     private final InputPanel.MediaListener mediaListener;
 

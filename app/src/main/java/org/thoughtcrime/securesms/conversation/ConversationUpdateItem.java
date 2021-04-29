@@ -1,11 +1,13 @@
 package org.thoughtcrime.securesms.conversation;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.text.Spannable;
 import android.text.SpannableString;
 import android.util.AttributeSet;
 import android.view.View;
-import android.widget.LinearLayout;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -14,23 +16,34 @@ import androidx.core.content.ContextCompat;
 import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.Observer;
+import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.button.MaterialButton;
+
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.BindableConversationItem;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.VerifyIdentityActivity;
+import org.thoughtcrime.securesms.conversation.ui.error.EnableCallNotificationSettingsDialog;
 import org.thoughtcrime.securesms.database.IdentityDatabase.IdentityRecord;
+import org.thoughtcrime.securesms.database.model.GroupCallUpdateDetailsUtil;
+import org.thoughtcrime.securesms.database.model.InMemoryMessageRecord;
 import org.thoughtcrime.securesms.database.model.LiveUpdateMessage;
 import org.thoughtcrime.securesms.database.model.MessageRecord;
 import org.thoughtcrime.securesms.database.model.UpdateDescription;
-import org.thoughtcrime.securesms.logging.Log;
+import org.thoughtcrime.securesms.giph.mp4.GiphyMp4Projection;
 import org.thoughtcrime.securesms.mms.GlideRequests;
 import org.thoughtcrime.securesms.recipients.LiveRecipient;
 import org.thoughtcrime.securesms.recipients.Recipient;
+import org.thoughtcrime.securesms.util.DateUtils;
 import org.thoughtcrime.securesms.util.IdentityUtil;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
+import org.thoughtcrime.securesms.util.ThemeUtil;
 import org.thoughtcrime.securesms.util.Util;
+import org.thoughtcrime.securesms.util.ViewUtil;
 import org.thoughtcrime.securesms.util.concurrent.ListenableFuture;
 import org.thoughtcrime.securesms.util.livedata.LiveDataUtil;
+import org.thoughtcrime.securesms.video.exo.AttachmentMediaSourceFactory;
 import org.whispersystems.libsignal.util.guava.Optional;
 
 import java.util.Collection;
@@ -40,24 +53,28 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
-public final class ConversationUpdateItem extends LinearLayout
+public final class ConversationUpdateItem extends FrameLayout
                                           implements BindableConversationItem
 {
-  private static final String TAG = ConversationUpdateItem.class.getSimpleName();
+  private static final String TAG = Log.tag(ConversationUpdateItem.class);
 
   private Set<ConversationMessage> batchSelected;
 
-  private TextView                body;
-  private TextView                actionButton;
-  private LiveRecipient           sender;
-  private ConversationMessage     conversationMessage;
-  private Optional<MessageRecord> nextMessageRecord;
-  private MessageRecord           messageRecord;
-  private LiveData<Spannable>     displayBody;
-  private EventListener           eventListener;
+  private TextView                  body;
+  private MaterialButton            actionButton;
+  private View                      background;
+  private ConversationMessage       conversationMessage;
+  private Recipient                 conversationRecipient;
+  private Optional<MessageRecord>   nextMessageRecord;
+  private MessageRecord             messageRecord;
+  private LiveData<SpannableString> displayBody;
+  private EventListener             eventListener;
 
   private final UpdateObserver updateObserver = new UpdateObserver();
-  private final SenderObserver senderObserver = new SenderObserver();
+
+  private final PresentOnChange          presentOnChange = new PresentOnChange();
+  private final RecipientObserverManager senderObserver  = new RecipientObserverManager(presentOnChange);
+  private final RecipientObserverManager groupObserver   = new RecipientObserverManager(presentOnChange);
 
   public ConversationUpdateItem(Context context) {
     super(context);
@@ -72,6 +89,7 @@ public final class ConversationUpdateItem extends LinearLayout
     super.onFinishInflate();
     this.body         = findViewById(R.id.conversation_update_body);
     this.actionButton = findViewById(R.id.conversation_update_action);
+    this.background   = findViewById(R.id.conversation_update_background);
 
     this.setOnClickListener(new InternalClickListener(null));
   }
@@ -86,11 +104,15 @@ public final class ConversationUpdateItem extends LinearLayout
                    @NonNull Set<ConversationMessage> batchSelected,
                    @NonNull Recipient conversationRecipient,
                    @Nullable String searchQuery,
-                   boolean pulseMention)
+                   boolean pulseMention,
+                   boolean hasWallpaper,
+                   boolean isMessageRequestAccepted,
+                   @NonNull AttachmentMediaSourceFactory attachmentMediaSourceFactory,
+                   boolean allowedToPlayInline)
   {
     this.batchSelected = batchSelected;
 
-    bind(lifecycleOwner, conversationMessage, nextMessageRecord);
+    bind(lifecycleOwner, conversationMessage, previousMessageRecord, nextMessageRecord, conversationRecipient, hasWallpaper);
   }
 
   @Override
@@ -105,25 +127,60 @@ public final class ConversationUpdateItem extends LinearLayout
 
   private void bind(@NonNull LifecycleOwner lifecycleOwner,
                     @NonNull ConversationMessage conversationMessage,
-                    @NonNull Optional<MessageRecord> nextMessageRecord)
+                    @NonNull Optional<MessageRecord> previousMessageRecord,
+                    @NonNull Optional<MessageRecord> nextMessageRecord,
+                    @NonNull Recipient conversationRecipient,
+                    boolean hasWallpaper)
   {
-    this.conversationMessage = conversationMessage;
-    this.messageRecord       = conversationMessage.getMessageRecord();
-    this.nextMessageRecord   = nextMessageRecord;
+    this.conversationMessage   = conversationMessage;
+    this.messageRecord         = conversationMessage.getMessageRecord();
+    this.nextMessageRecord     = nextMessageRecord;
+    this.conversationRecipient = conversationRecipient;
 
-    observeSender(lifecycleOwner, messageRecord.getIndividualRecipient());
+    senderObserver.observe(lifecycleOwner, messageRecord.getIndividualRecipient());
 
-    UpdateDescription   updateDescription = Objects.requireNonNull(messageRecord.getUpdateDisplayBody(getContext()));
-    LiveData<Spannable> liveUpdateMessage = LiveUpdateMessage.fromMessageDescription(getContext(), updateDescription, ContextCompat.getColor(getContext(), R.color.conversation_item_update_text_color));
-    LiveData<Spannable> spannableMessage  = loading(liveUpdateMessage);
+    if (conversationRecipient.isActiveGroup() && conversationMessage.getMessageRecord().isGroupCall()) {
+      groupObserver.observe(lifecycleOwner, conversationRecipient);
+    } else {
+      groupObserver.observe(lifecycleOwner, null);
+    }
 
-    present(conversationMessage, nextMessageRecord);
+    int textColor = ContextCompat.getColor(getContext(), R.color.conversation_item_update_text_color);
+    if (ThemeUtil.isDarkTheme(getContext()) && hasWallpaper) {
+      textColor = ContextCompat.getColor(getContext(), R.color.core_grey_15);
+    }
+
+    if (!ThemeUtil.isDarkTheme(getContext())) {
+      if (hasWallpaper) {
+        actionButton.setStrokeColor(ColorStateList.valueOf(getResources().getColor(R.color.core_grey_45)));
+      } else {
+        actionButton.setStrokeColor(ColorStateList.valueOf(getResources().getColor(R.color.signal_button_secondary_stroke)));
+      }
+    }
+
+    UpdateDescription         updateDescription = Objects.requireNonNull(messageRecord.getUpdateDisplayBody(getContext()));
+    LiveData<SpannableString> liveUpdateMessage = LiveUpdateMessage.fromMessageDescription(getContext(), updateDescription, textColor);
+    LiveData<SpannableString> spannableMessage  = loading(liveUpdateMessage);
 
     observeDisplayBody(lifecycleOwner, spannableMessage);
+
+    present(conversationMessage, nextMessageRecord, conversationRecipient);
+
+    presentBackground(shouldCollapse(messageRecord, previousMessageRecord),
+                      shouldCollapse(messageRecord, nextMessageRecord),
+                      hasWallpaper);
+  }
+
+  private static boolean shouldCollapse(@NonNull MessageRecord current, @NonNull Optional<MessageRecord> candidate)
+  {
+    return candidate.isPresent()      &&
+           candidate.get().isUpdate() &&
+           DateUtils.isSameDay(current.getTimestamp(), candidate.get().getTimestamp()) &&
+           isSameType(current, candidate.get());
   }
 
   /** After a short delay, if the main data hasn't shown yet, then a loading message is displayed. */
-  private @NonNull LiveData<Spannable> loading(@NonNull LiveData<Spannable> string) {
+  private @NonNull LiveData<SpannableString> loading(@NonNull LiveData<SpannableString> string) {
     return LiveDataUtil.until(string, LiveDataUtil.delay(250, new SpannableString(getContext().getString(R.string.ConversationUpdateItem_loading))));
   }
 
@@ -131,20 +188,59 @@ public final class ConversationUpdateItem extends LinearLayout
   public void unbind() {
   }
 
-  private void observeSender(@NonNull LifecycleOwner lifecycleOwner, @Nullable Recipient recipient) {
-    if (sender != null) {
-      sender.getLiveData().removeObserver(senderObserver);
+  @Override
+  public void showProjectionArea() {
+  }
+
+  @Override
+  public void hideProjectionArea() {
+    throw new UnsupportedOperationException("Call makes no sense for a conversation update item");
+  }
+
+  @Override
+  public int getAdapterPosition() {
+    throw new UnsupportedOperationException("Don't delegate to this method.");
+  }
+
+  @Override
+  public @NonNull GiphyMp4Projection getProjection(@NonNull RecyclerView recyclerView) {
+    throw new UnsupportedOperationException("ConversationUpdateItems cannot be projected into.");
+  }
+
+  @Override
+  public boolean canPlayContent() {
+    return false;
+  }
+
+  static final class RecipientObserverManager {
+
+    private final Observer<Recipient> recipientObserver;
+
+    private LiveRecipient recipient;
+
+    RecipientObserverManager(@NonNull Observer<Recipient> observer){
+      this.recipientObserver = observer;
     }
 
-    if (recipient != null) {
-      sender = recipient.live();
-      sender.getLiveData().observe(lifecycleOwner, senderObserver);
-    } else {
-      sender = null;
+    public void observe(@NonNull LifecycleOwner lifecycleOwner, @Nullable Recipient recipient) {
+      if (this.recipient != null) {
+        this.recipient.getLiveData().removeObserver(recipientObserver);
+      }
+
+      if (recipient != null) {
+        this.recipient = recipient.live();
+        this.recipient.getLiveData().observe(lifecycleOwner, recipientObserver);
+      } else {
+        this.recipient = null;
+      }
+    }
+
+    @NonNull Recipient getObservedRecipient() {
+      return recipient.get();
     }
   }
 
-  private void observeDisplayBody(@NonNull LifecycleOwner lifecycleOwner, @Nullable LiveData<Spannable> displayBody) {
+  private void observeDisplayBody(@NonNull LifecycleOwner lifecycleOwner, @Nullable LiveData<SpannableString> displayBody) {
     if (this.displayBody != displayBody) {
       if (this.displayBody != null) {
         this.displayBody.removeObserver(updateObserver);
@@ -167,7 +263,10 @@ public final class ConversationUpdateItem extends LinearLayout
     }
   }
 
-  private void present(ConversationMessage conversationMessage, @NonNull Optional<MessageRecord> nextMessageRecord) {
+  private void present(@NonNull ConversationMessage conversationMessage,
+                       @NonNull Optional<MessageRecord> nextMessageRecord,
+                       @NonNull Recipient conversationRecipient)
+  {
     if (batchSelected.contains(conversationMessage)) setSelected(true);
     else                                             setSelected(false);
 
@@ -178,20 +277,43 @@ public final class ConversationUpdateItem extends LinearLayout
       actionButton.setVisibility(VISIBLE);
       actionButton.setOnClickListener(v -> {
         if (batchSelected.isEmpty() && eventListener != null) {
-          eventListener.onGroupMigrationLearnMoreClicked(conversationMessage.getMessageRecord().getGroupV1MigrationEventInvites());
+          eventListener.onGroupMigrationLearnMoreClicked(conversationMessage.getMessageRecord().getGroupV1MigrationMembershipChanges());
+        }
+      });
+    } else if (conversationMessage.getMessageRecord().isFailedDecryptionType() &&
+              (!nextMessageRecord.isPresent() || !nextMessageRecord.get().isFailedDecryptionType()))
+    {
+      actionButton.setText(R.string.ConversationUpdateItem_learn_more);
+      actionButton.setVisibility(VISIBLE);
+      actionButton.setOnClickListener(v -> {
+        if (batchSelected.isEmpty() && eventListener != null) {
+          eventListener.onDecryptionFailedLearnMoreClicked();
+        }
+      });
+    } else if (conversationMessage.getMessageRecord().isIdentityUpdate()) {
+      actionButton.setText(R.string.ConversationUpdateItem_learn_more);
+      actionButton.setVisibility(VISIBLE);
+      actionButton.setOnClickListener(v -> {
+        if (batchSelected.isEmpty() && eventListener != null) {
+          eventListener.onSafetyNumberLearnMoreClicked(conversationMessage.getMessageRecord().getIndividualRecipient());
         }
       });
     } else if (conversationMessage.getMessageRecord().isGroupCall()) {
-
-      UpdateDescription updateDescription = MessageRecord.getGroupCallUpdateDescription(getContext(), conversationMessage.getMessageRecord().getBody());
+      UpdateDescription updateDescription = MessageRecord.getGroupCallUpdateDescription(getContext(), conversationMessage.getMessageRecord().getBody(), true);
       Collection<UUID>  uuids             = updateDescription.getMentioned();
 
       int text = 0;
       if (Util.hasItems(uuids)) {
-        text = uuids.contains(TextSecurePreferences.getLocalUuid(getContext())) ? R.string.ConversationUpdateItem_return_to_call : R.string.ConversationUpdateItem_join_call;
+        if (uuids.contains(TextSecurePreferences.getLocalUuid(getContext()))) {
+          text = R.string.ConversationUpdateItem_return_to_call;
+        } else if (GroupCallUpdateDetailsUtil.parse(conversationMessage.getMessageRecord().getBody()).getIsCallFull()) {
+          text = R.string.ConversationUpdateItem_call_is_full;
+        } else {
+          text = R.string.ConversationUpdateItem_join_call;
+        }
       }
 
-      if (text != 0) {
+      if (text != 0 && conversationRecipient.isGroup() && conversationRecipient.isActiveGroup()) {
         actionButton.setText(text);
         actionButton.setVisibility(VISIBLE);
         actionButton.setOnClickListener(v -> {
@@ -203,10 +325,107 @@ public final class ConversationUpdateItem extends LinearLayout
         actionButton.setVisibility(GONE);
         actionButton.setOnClickListener(null);
       }
+    } else if (conversationMessage.getMessageRecord().isSelfCreatedGroup()) {
+      actionButton.setText(R.string.ConversationUpdateItem_invite_friends);
+      actionButton.setVisibility(VISIBLE);
+      actionButton.setOnClickListener(v -> {
+        if (batchSelected.isEmpty() && eventListener != null) {
+          eventListener.onInviteFriendsToGroupClicked(conversationRecipient.requireGroupId().requireV2());
+        }
+      });
+    } else if ((conversationMessage.getMessageRecord().isMissedAudioCall() || conversationMessage.getMessageRecord().isMissedVideoCall()) && EnableCallNotificationSettingsDialog.shouldShow(getContext())) {
+      actionButton.setVisibility(VISIBLE);
+      actionButton.setText(R.string.ConversationUpdateItem_enable_call_notifications);
+      actionButton.setOnClickListener(v -> {
+        if (eventListener != null) {
+          eventListener.onEnableCallNotificationsClicked();
+        }
+      });
+    } else if (conversationMessage.getMessageRecord().isInMemoryMessageRecord() && ((InMemoryMessageRecord) conversationMessage.getMessageRecord()).showActionButton()) {
+      InMemoryMessageRecord inMemoryMessageRecord = (InMemoryMessageRecord) conversationMessage.getMessageRecord();
+      actionButton.setVisibility(VISIBLE);
+      actionButton.setText(inMemoryMessageRecord.getActionButtonText());
+      actionButton.setOnClickListener(v -> {
+        if (eventListener != null) {
+          eventListener.onInMemoryMessageClicked(inMemoryMessageRecord);
+        }
+      });
     } else {
       actionButton.setVisibility(GONE);
       actionButton.setOnClickListener(null);
     }
+  }
+
+  private void presentBackground(boolean collapseAbove, boolean collapseBelow, boolean hasWallpaper) {
+    int marginDefault    = getContext().getResources().getDimensionPixelOffset(R.dimen.conversation_update_vertical_margin);
+    int marginCollapsed  = 0;
+    int paddingDefault   = getContext().getResources().getDimensionPixelOffset(R.dimen.conversation_update_vertical_padding);
+    int paddingCollapsed = getContext().getResources().getDimensionPixelOffset(R.dimen.conversation_update_vertical_padding_collapsed);
+
+    if (collapseAbove && collapseBelow) {
+      ViewUtil.setTopMargin(background, marginCollapsed);
+      ViewUtil.setBottomMargin(background, marginCollapsed);
+
+      ViewUtil.setPaddingTop(background, paddingCollapsed);
+      ViewUtil.setPaddingBottom(background, paddingCollapsed);
+
+      ViewUtil.updateLayoutParams(background, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+
+      if (hasWallpaper) {
+        background.setBackgroundResource(R.drawable.conversation_update_wallpaper_background_middle);
+      } else {
+        background.setBackground(null);
+      }
+    } else if (collapseAbove) {
+      ViewUtil.setTopMargin(background, marginCollapsed);
+      ViewUtil.setBottomMargin(background, marginDefault);
+
+      ViewUtil.setPaddingTop(background, paddingCollapsed);
+      ViewUtil.setPaddingBottom(background, paddingDefault);
+
+      ViewUtil.updateLayoutParams(background, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+
+      if (hasWallpaper) {
+        background.setBackgroundResource(R.drawable.conversation_update_wallpaper_background_bottom);
+      } else {
+        background.setBackground(null);
+      }
+    } else if (collapseBelow) {
+      ViewUtil.setTopMargin(background, marginDefault);
+      ViewUtil.setBottomMargin(background, marginCollapsed);
+
+      ViewUtil.setPaddingTop(background, paddingDefault);
+      ViewUtil.setPaddingBottom(background, paddingCollapsed);
+
+      ViewUtil.updateLayoutParams(background, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+
+      if (hasWallpaper) {
+        background.setBackgroundResource(R.drawable.conversation_update_wallpaper_background_top);
+      } else {
+        background.setBackground(null);
+      }
+    } else {
+      ViewUtil.setTopMargin(background, marginDefault);
+      ViewUtil.setBottomMargin(background, marginDefault);
+
+      ViewUtil.setPaddingTop(background, paddingDefault);
+      ViewUtil.setPaddingBottom(background, paddingDefault);
+
+      ViewUtil.updateLayoutParams(background, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+
+      if (hasWallpaper) {
+        background.setBackgroundResource(R.drawable.conversation_update_wallpaper_background_singular);
+      } else {
+        background.setBackground(null);
+      }
+    }
+  }
+
+  private static boolean isSameType(@NonNull MessageRecord current, @NonNull MessageRecord candidate) {
+    return (current.isGroupUpdate()           && candidate.isGroupUpdate())   ||
+           (current.isProfileChange()         && candidate.isProfileChange()) ||
+           (current.isGroupCall()             && candidate.isGroupCall())     ||
+           (current.isExpirationTimerUpdate() && candidate.isExpirationTimerUpdate());
   }
 
   @Override
@@ -214,11 +433,14 @@ public final class ConversationUpdateItem extends LinearLayout
     super.setOnClickListener(new InternalClickListener(l));
   }
 
-  private final class SenderObserver implements Observer<Recipient> {
+  private final class PresentOnChange implements Observer<Recipient> {
 
     @Override
     public void onChanged(Recipient recipient) {
-      present(conversationMessage, nextMessageRecord);
+      if (recipient.getId() == conversationRecipient.getId() && (conversationRecipient == null || !conversationRecipient.hasSameContent(recipient))) {
+        conversationRecipient = recipient;
+        present(conversationMessage, nextMessageRecord, conversationRecipient);
+      }
     }
   }
 
@@ -249,7 +471,7 @@ public final class ConversationUpdateItem extends LinearLayout
         return;
       }
 
-      final Recipient sender = ConversationUpdateItem.this.sender.get();
+      final Recipient sender = ConversationUpdateItem.this.senderObserver.getObservedRecipient();
 
       IdentityUtil.getRemoteIdentityKey(getContext(), sender).addListener(new ListenableFuture.Listener<Optional<IdentityRecord>>() {
         @Override

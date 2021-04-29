@@ -17,11 +17,12 @@
 package org.thoughtcrime.securesms.util;
 
 import android.telephony.SmsMessage;
-import org.thoughtcrime.securesms.logging.Log;
+
+import org.signal.core.util.logging.Log;
 
 public class SmsCharacterCalculator extends CharacterCalculator {
 
-  private static final String TAG = SmsCharacterCalculator.class.getSimpleName();
+  private static final String TAG = Log.tag(SmsCharacterCalculator.class);
 
   @Override
   public CharacterState calculateCharacters(String messageBody) {

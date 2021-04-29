@@ -21,8 +21,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.IBinder;
-import org.thoughtcrime.securesms.logging.Log;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.crypto.MasterSecret;
 import org.thoughtcrime.securesms.service.KeyCachingService;
 
@@ -34,7 +34,7 @@ import org.thoughtcrime.securesms.service.KeyCachingService;
  */
 public abstract class PassphraseActivity extends BaseActivity {
 
-  private static final String TAG = PassphraseActivity.class.getSimpleName();
+  private static final String TAG = Log.tag(PassphraseActivity.class);
 
   private KeyCachingService keyCachingService;
   private MasterSecret masterSecret;

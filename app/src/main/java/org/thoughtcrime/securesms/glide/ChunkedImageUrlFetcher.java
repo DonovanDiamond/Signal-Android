@@ -7,8 +7,8 @@ import com.bumptech.glide.Priority;
 import com.bumptech.glide.load.DataSource;
 import com.bumptech.glide.load.data.DataFetcher;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.giph.model.ChunkedImageUrl;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.net.ChunkedDataFetcher;
 import org.thoughtcrime.securesms.net.RequestController;
 
@@ -18,7 +18,7 @@ import okhttp3.OkHttpClient;
 
 class ChunkedImageUrlFetcher implements DataFetcher<InputStream> {
 
-  private static final String TAG = ChunkedImageUrlFetcher.class.getSimpleName();
+  private static final String TAG = Log.tag(ChunkedImageUrlFetcher.class);
 
   private final OkHttpClient    client;
   private final ChunkedImageUrl url;

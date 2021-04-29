@@ -2,9 +2,9 @@ package org.thoughtcrime.securesms.service.webrtc;
 
 import androidx.annotation.NonNull;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.components.webrtc.BroadcastVideoSink;
 import org.thoughtcrime.securesms.events.WebRtcViewModel;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.ringrtc.Camera;
 import org.thoughtcrime.securesms.ringrtc.RemotePeer;
 import org.thoughtcrime.securesms.service.webrtc.state.WebRtcServiceState;
@@ -54,7 +54,7 @@ public class IdleActionProcessor extends WebRtcActionProcessor {
     WebRtcActionProcessor processor   = isGroupCall ? new GroupPreJoinActionProcessor(webRtcInteractor)
                                                     : new PreJoinActionProcessor(webRtcInteractor);
 
-    currentState = initializeVanityCamera(WebRtcVideoUtil.initializeVideo(context, webRtcInteractor.getCameraEventListener(), currentState));
+    currentState = WebRtcVideoUtil.initializeVanityCamera(WebRtcVideoUtil.initializeVideo(context, webRtcInteractor.getCameraEventListener(), currentState));
 
     currentState = currentState.builder()
                                .actionProcessor(processor)
@@ -65,31 +65,5 @@ public class IdleActionProcessor extends WebRtcActionProcessor {
 
     return isGroupCall ? currentState.getActionProcessor().handlePreJoinCall(currentState, remotePeer)
                        : currentState;
-  }
-
-  private @NonNull WebRtcServiceState initializeVanityCamera(@NonNull WebRtcServiceState currentState) {
-    Camera             camera = currentState.getVideoState().requireCamera();
-    BroadcastVideoSink sink   = currentState.getVideoState().requireLocalSink();
-
-    if (camera.hasCapturer()) {
-      camera.initCapturer(new CapturerObserver() {
-        @Override
-        public void onFrameCaptured(VideoFrame videoFrame) {
-          sink.onFrame(videoFrame);
-        }
-
-        @Override
-        public void onCapturerStarted(boolean success) {}
-
-        @Override
-        public void onCapturerStopped() {}
-      });
-      camera.setEnabled(true);
-    }
-
-    return currentState.builder()
-                       .changeLocalDeviceState()
-                       .cameraState(camera.getCameraState())
-                       .build();
   }
 }

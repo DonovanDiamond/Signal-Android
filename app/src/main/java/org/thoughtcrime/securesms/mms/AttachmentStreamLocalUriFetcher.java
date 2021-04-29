@@ -6,7 +6,7 @@ import com.bumptech.glide.Priority;
 import com.bumptech.glide.load.DataSource;
 import com.bumptech.glide.load.data.DataFetcher;
 
-import org.thoughtcrime.securesms.logging.Log;
+import org.signal.core.util.logging.Log;
 import org.whispersystems.libsignal.InvalidMessageException;
 import org.whispersystems.libsignal.util.guava.Optional;
 import org.whispersystems.signalservice.api.crypto.AttachmentCipherInputStream;
@@ -17,7 +17,7 @@ import java.io.InputStream;
 
 class AttachmentStreamLocalUriFetcher implements DataFetcher<InputStream> {
 
-  private static final String TAG = AttachmentStreamLocalUriFetcher.class.getSimpleName();
+  private static final String TAG = Log.tag(AttachmentStreamLocalUriFetcher.class);
 
   private final File             attachment;
   private final byte[]           key;

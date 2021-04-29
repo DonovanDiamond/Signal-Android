@@ -6,6 +6,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.WorkerThread;
 
+import org.signal.core.util.logging.Log;
 import org.signal.storageservice.protos.groups.GroupExternalCredential;
 import org.signal.storageservice.protos.groups.local.DecryptedGroup;
 import org.signal.storageservice.protos.groups.local.DecryptedGroupJoinInfo;
@@ -14,9 +15,9 @@ import org.signal.zkgroup.groups.GroupMasterKey;
 import org.signal.zkgroup.groups.UuidCiphertext;
 import org.thoughtcrime.securesms.database.DatabaseFactory;
 import org.thoughtcrime.securesms.database.GroupDatabase;
+import org.thoughtcrime.securesms.groups.v2.GroupInviteLinkUrl;
 import org.thoughtcrime.securesms.groups.v2.GroupLinkPassword;
 import org.thoughtcrime.securesms.keyvalue.SignalStore;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.profiles.AvatarHelper;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.recipients.RecipientId;
@@ -73,13 +74,15 @@ public final class GroupManager {
       try (GroupManagerV2.GroupEditor edit = new GroupManagerV2(context).edit(groupId.requireV2())) {
         return edit.updateGroupTitleAndAvatar(nameChanged ? name : null, avatar, avatarChanged);
       }
-    } else {
+    } else if (groupId.isV1()) {
       List<Recipient> members = DatabaseFactory.getGroupDatabase(context)
                                                .getGroupMembers(groupId, GroupDatabase.MemberSet.FULL_MEMBERS_EXCLUDING_SELF);
 
       Set<RecipientId> recipientIds = getMemberIds(new HashSet<>(members));
 
       return GroupManagerV1.updateGroup(context, groupId.requireV1(), recipientIds, avatar, name, 0);
+    } else {
+      return GroupManagerV1.updateGroup(context, groupId.requireMms(), avatar, name);
     }
   }
 
@@ -298,13 +301,13 @@ public final class GroupManager {
   }
 
   @WorkerThread
-  public static void setGroupLinkEnabledState(@NonNull Context context,
-                                              @NonNull GroupId.V2 groupId,
-                                              @NonNull GroupLinkState state)
+  public static GroupInviteLinkUrl setGroupLinkEnabledState(@NonNull Context context,
+                                                            @NonNull GroupId.V2 groupId,
+                                                            @NonNull GroupLinkState state)
       throws GroupChangeFailedException, GroupInsufficientRightsException, IOException, GroupNotAMemberException, GroupChangeBusyException
   {
     try (GroupManagerV2.GroupEditor editor = new GroupManagerV2(context).edit(groupId.requireV2())) {
-      editor.setJoinByGroupLinkState(state);
+      return editor.setJoinByGroupLinkState(state);
     }
   }
 

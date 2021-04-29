@@ -8,6 +8,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.greenrobot.eventbus.EventBus;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.attachments.Attachment;
 import org.thoughtcrime.securesms.attachments.AttachmentId;
@@ -21,7 +22,6 @@ import org.thoughtcrime.securesms.events.PartProgressEvent;
 import org.thoughtcrime.securesms.jobmanager.Data;
 import org.thoughtcrime.securesms.jobmanager.Job;
 import org.thoughtcrime.securesms.jobmanager.impl.NetworkConstraint;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.mms.PartAuthority;
 import org.thoughtcrime.securesms.service.GenericForegroundService;
 import org.thoughtcrime.securesms.service.NotificationController;
@@ -86,6 +86,11 @@ public final class AttachmentUploadJob extends BaseJob {
   @Override
   public @NonNull String getFactoryKey() {
     return KEY;
+  }
+
+  @Override
+  protected boolean shouldTrace() {
+    return true;
   }
 
   @Override
@@ -162,6 +167,7 @@ public final class AttachmentUploadJob extends BaseJob {
                                                                        .withFileName(attachment.getFileName())
                                                                        .withVoiceNote(attachment.isVoiceNote())
                                                                        .withBorderless(attachment.isBorderless())
+                                                                       .withGif(attachment.isVideoGif())
                                                                        .withWidth(attachment.getWidth())
                                                                        .withHeight(attachment.getHeight())
                                                                        .withUploadTimestamp(System.currentTimeMillis())

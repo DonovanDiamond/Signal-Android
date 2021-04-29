@@ -16,14 +16,14 @@
 
 package org.thoughtcrime.securesms.util;
 
-import androidx.lifecycle.LifecycleOwner;
-import androidx.lifecycle.MutableLiveData;
-import androidx.lifecycle.Observer;
 import androidx.annotation.MainThread;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.lifecycle.LifecycleOwner;
+import androidx.lifecycle.MutableLiveData;
+import androidx.lifecycle.Observer;
 
-import org.thoughtcrime.securesms.logging.Log;
+import org.signal.core.util.logging.Log;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class SingleLiveEvent<T> extends MutableLiveData<T> {
 
-  private static final String TAG = SingleLiveEvent.class.getSimpleName();
+  private static final String TAG = Log.tag(SingleLiveEvent.class);
 
   private final AtomicBoolean mPending = new AtomicBoolean(false);
 

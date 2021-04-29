@@ -3,15 +3,16 @@ package org.thoughtcrime.securesms.util;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.net.ConnectivityManager;
-import androidx.annotation.NonNull;
 import android.telephony.TelephonyManager;
 
-import org.thoughtcrime.securesms.logging.Log;
+import androidx.annotation.NonNull;
+
+import org.signal.core.util.logging.Log;
 
 import java.util.Locale;
 
 public class TelephonyUtil {
-  private static final String TAG = TelephonyUtil.class.getSimpleName();
+  private static final String TAG = Log.tag(TelephonyUtil.class);
 
   public static TelephonyManager getManager(final Context context) {
     return (TelephonyManager)context.getSystemService(Context.TELEPHONY_SERVICE);

@@ -3,12 +3,12 @@ package org.thoughtcrime.securesms.jobs;
 
 import androidx.annotation.NonNull;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.crypto.UnidentifiedAccessUtil;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.jobmanager.Data;
 import org.thoughtcrime.securesms.jobmanager.Job;
 import org.thoughtcrime.securesms.jobmanager.impl.NetworkConstraint;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
 import org.whispersystems.libsignal.util.guava.Optional;
 import org.whispersystems.signalservice.api.SignalServiceMessageSender;
@@ -23,7 +23,7 @@ public class MultiDeviceConfigurationUpdateJob extends BaseJob {
 
   public static final String KEY = "MultiDeviceConfigurationUpdateJob";
 
-  private static final String TAG = MultiDeviceConfigurationUpdateJob.class.getSimpleName();
+  private static final String TAG = Log.tag(MultiDeviceConfigurationUpdateJob.class);
 
   private static final String KEY_READ_RECEIPTS_ENABLED                    = "read_receipts_enabled";
   private static final String KEY_TYPING_INDICATORS_ENABLED                = "typing_indicators_enabled";

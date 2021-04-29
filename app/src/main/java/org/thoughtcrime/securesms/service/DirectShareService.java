@@ -16,15 +16,14 @@ import android.service.chooser.ChooserTargetService;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.view.ContextThemeWrapper;
-import androidx.core.content.ContextCompat;
 
 import com.annimon.stream.Stream;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.database.DatabaseFactory;
 import org.thoughtcrime.securesms.database.ThreadDatabase;
 import org.thoughtcrime.securesms.database.model.ThreadRecord;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.mms.GlideApp;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.recipients.RecipientId;
@@ -45,7 +44,7 @@ import java.util.concurrent.ExecutionException;
 public class DirectShareService extends ChooserTargetService {
 
 
-  private static final String TAG         = DirectShareService.class.getSimpleName();
+  private static final String TAG         = Log.tag(DirectShareService.class);
   private static final int    MAX_TARGETS = 10;
 
   @Override

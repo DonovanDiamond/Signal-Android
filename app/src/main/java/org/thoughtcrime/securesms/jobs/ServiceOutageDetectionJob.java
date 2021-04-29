@@ -3,12 +3,12 @@ package org.thoughtcrime.securesms.jobs;
 import androidx.annotation.NonNull;
 
 import org.greenrobot.eventbus.EventBus;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.BuildConfig;
 import org.thoughtcrime.securesms.events.ReminderUpdateEvent;
 import org.thoughtcrime.securesms.jobmanager.Data;
 import org.thoughtcrime.securesms.jobmanager.Job;
 import org.thoughtcrime.securesms.jobmanager.impl.NetworkConstraint;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.transport.RetryLaterException;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
 
@@ -19,7 +19,7 @@ public class ServiceOutageDetectionJob extends BaseJob {
 
   public static final String KEY = "ServiceOutageDetectionJob";
 
-  private static final String TAG = ServiceOutageDetectionJob.class.getSimpleName();
+  private static final String TAG = Log.tag(ServiceOutageDetectionJob.class);
 
   private static final String IP_SUCCESS = "127.0.0.1";
   private static final String IP_FAILURE = "127.0.0.2";
@@ -30,7 +30,7 @@ public class ServiceOutageDetectionJob extends BaseJob {
                            .setQueue("ServiceOutageDetectionJob")
                            .addConstraint(NetworkConstraint.KEY)
                            .setMaxAttempts(5)
-                           .setMaxInstances(1)
+                           .setMaxInstancesForFactory(1)
                            .build());
   }
 

@@ -2,8 +2,8 @@ package org.thoughtcrime.securesms.webrtc.locks;
 
 import android.os.Build;
 import android.os.PowerManager;
-import org.thoughtcrime.securesms.logging.Log;
 
+import org.signal.core.util.logging.Log;
 import org.whispersystems.libsignal.util.guava.Optional;
 
 import java.lang.reflect.InvocationTargetException;
@@ -17,7 +17,7 @@ import java.lang.reflect.Method;
 */
 class ProximityLock {
 
-  private static final String TAG = ProximityLock.class.getSimpleName();
+  private static final String TAG = Log.tag(ProximityLock.class);
 
   private final Method wakelockParameterizedRelease = getWakelockParamterizedReleaseMethod();
   private final Optional<PowerManager.WakeLock> proximityLock;

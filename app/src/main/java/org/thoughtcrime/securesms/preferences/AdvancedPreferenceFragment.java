@@ -1,5 +1,6 @@
 package org.thoughtcrime.securesms.preferences;
 
+import android.app.ActionBar;
 import android.app.Activity;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -8,51 +9,56 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.provider.ContactsContract;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.ContextCompat;
 import androidx.preference.CheckBoxPreference;
 import androidx.preference.Preference;
 
 import com.google.firebase.iid.FirebaseInstanceId;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.ApplicationPreferencesActivity;
 import org.thoughtcrime.securesms.BuildConfig;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.contacts.ContactAccessor;
 import org.thoughtcrime.securesms.contacts.ContactIdentityManager;
+import org.thoughtcrime.securesms.delete.DeleteAccountFragment;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
-import org.thoughtcrime.securesms.keyvalue.KbsValues;
 import org.thoughtcrime.securesms.keyvalue.SignalStore;
-import org.thoughtcrime.securesms.lock.v2.CreateKbsPinActivity;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.logsubmit.SubmitDebugLogActivity;
-import org.thoughtcrime.securesms.pin.PinOptOutDialog;
-import org.thoughtcrime.securesms.pin.PinState;
+import org.thoughtcrime.securesms.payments.preferences.PaymentsActivity;
+import org.thoughtcrime.securesms.payments.preferences.transfer.PaymentsTransferFragmentArgs;
+import org.thoughtcrime.securesms.phonenumbers.PhoneNumberFormatter;
 import org.thoughtcrime.securesms.registration.RegistrationNavigationActivity;
 import org.thoughtcrime.securesms.util.FeatureFlags;
+import org.thoughtcrime.securesms.util.SpanUtil;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
-import org.thoughtcrime.securesms.util.concurrent.SimpleTask;
 import org.thoughtcrime.securesms.util.task.ProgressDialogAsyncTask;
-import org.thoughtcrime.securesms.util.views.SimpleProgressDialog;
 import org.whispersystems.libsignal.util.guava.Optional;
 import org.whispersystems.signalservice.api.SignalServiceAccountManager;
+import org.whispersystems.signalservice.api.payments.FormatterOptions;
+import org.whispersystems.signalservice.api.payments.Money;
 import org.whispersystems.signalservice.api.push.exceptions.AuthorizationFailedException;
-import org.whispersystems.signalservice.internal.contacts.crypto.UnauthenticatedResponseException;
 
 import java.io.IOException;
 
 public class AdvancedPreferenceFragment extends CorrectedPreferenceFragment {
-  private static final String TAG = AdvancedPreferenceFragment.class.getSimpleName();
+  private static final String TAG = Log.tag(AdvancedPreferenceFragment.class);
 
   private static final String PUSH_MESSAGING_PREF   = "pref_toggle_push_messaging";
   private static final String SUBMIT_DEBUG_LOG_PREF = "pref_submit_debug_logs";
   private static final String INTERNAL_PREF         = "pref_internal";
   private static final String ADVANCED_PIN_PREF     = "pref_advanced_pin_settings";
+  private static final String DELETE_ACCOUNT        = "pref_delete_account";
 
   private static final int PICK_IDENTITY_CONTACT = 1;
+  private static final int TRANSFER_CURRENCY     = 2;
 
   @Override
   public void onCreate(Bundle paramBundle) {
@@ -66,12 +72,7 @@ public class AdvancedPreferenceFragment extends CorrectedPreferenceFragment {
 
     Preference pinSettings = this.findPreference(ADVANCED_PIN_PREF);
     pinSettings.setOnPreferenceClickListener(preference -> {
-      requireActivity().getSupportFragmentManager()
-                       .beginTransaction()
-                       .setCustomAnimations(R.anim.slide_from_end, R.anim.slide_to_start, R.anim.slide_from_start, R.anim.slide_to_end)
-                       .replace(android.R.id.content, new AdvancedPinPreferenceFragment())
-                       .addToBackStack(null)
-                       .commit();
+      getApplicationPreferencesActivity().pushFragment(new AdvancedPinPreferenceFragment());
       return false;
     });
 
@@ -79,17 +80,52 @@ public class AdvancedPreferenceFragment extends CorrectedPreferenceFragment {
     internalPreference.setVisible(FeatureFlags.internalUser());
     internalPreference.setOnPreferenceClickListener(preference -> {
       if (FeatureFlags.internalUser()) {
-        requireActivity().getSupportFragmentManager()
-                         .beginTransaction()
-                         .setCustomAnimations(R.anim.slide_from_end, R.anim.slide_to_start, R.anim.slide_from_start, R.anim.slide_to_end)
-                         .replace(android.R.id.content, new InternalOptionsPreferenceFragment())
-                         .addToBackStack(null)
-                         .commit();
+        getApplicationPreferencesActivity().pushFragment(new InternalOptionsPreferenceFragment());
         return true;
       } else {
         return false;
       }
     });
+
+    Preference deleteAccount = this.findPreference(DELETE_ACCOUNT);
+    deleteAccount.setOnPreferenceClickListener(preference -> {
+      Money.MobileCoin latestBalance = SignalStore.paymentsValues().mobileCoinLatestBalance().getFullAmount().requireMobileCoin();
+
+      if (!latestBalance.equals(Money.MobileCoin.ZERO)) {
+        new AlertDialog.Builder(requireContext())
+                       .setTitle(R.string.AdvancedPreferenceFragment__transfer_mob_balance)
+                       .setMessage(getString(R.string.AdvancedPreferenceFragment__you_have_a_balance_of_s, latestBalance.toString(FormatterOptions.defaults())))
+                       .setPositiveButton(R.string.AdvancedPreferenceFragment__transfer, (dialog, which) -> {
+                         Intent intent = new Intent(requireContext(), PaymentsActivity.class);
+                         intent.putExtra(PaymentsActivity.EXTRA_PAYMENTS_STARTING_ACTION, R.id.action_directly_to_paymentsTransfer);
+                         intent.putExtra(PaymentsActivity.EXTRA_STARTING_ARGUMENTS, new PaymentsTransferFragmentArgs.Builder().setFinishOnConfirm(true).build().toBundle());
+                         startActivityForResult(intent, TRANSFER_CURRENCY);
+                         dialog.dismiss();
+                       })
+                       .setNegativeButton(SpanUtil.color(ContextCompat.getColor(requireContext(), R.color.signal_alert_primary), getString(R.string.AdvancedPreferenceFragment__dont_transfer)), (dialog, which) -> {
+                         getApplicationPreferencesActivity().pushFragment(new DeleteAccountFragment());
+                         dialog.dismiss();
+                       })
+                       .show();
+      } else {
+        getApplicationPreferencesActivity().pushFragment(new DeleteAccountFragment());
+      }
+      return false;
+    });
+  }
+
+  @Override
+  public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+    super.onViewCreated(view, savedInstanceState);
+
+    view.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.signal_background_tertiary));
+
+    View                   list   = view.findViewById(R.id.recycler_view);
+    ViewGroup.LayoutParams params = list.getLayoutParams();
+
+    params.height = ActionBar.LayoutParams.WRAP_CONTENT;
+    list.setLayoutParams(params);
+    list.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.signal_background_primary));
   }
 
   @Override
@@ -100,7 +136,7 @@ public class AdvancedPreferenceFragment extends CorrectedPreferenceFragment {
   @Override
   public void onResume() {
     super.onResume();
-    ((ApplicationPreferencesActivity) getActivity()).getSupportActionBar().setTitle(R.string.preferences__advanced);
+    getApplicationPreferencesActivity().getSupportActionBar().setTitle(R.string.preferences__advanced);
 
     initializePushMessagingToggle();
   }
@@ -112,7 +148,13 @@ public class AdvancedPreferenceFragment extends CorrectedPreferenceFragment {
     Log.i(TAG, "Got result: " + resultCode + " for req: " + reqCode);
     if (resultCode == Activity.RESULT_OK && reqCode == PICK_IDENTITY_CONTACT) {
       handleIdentitySelection(data);
+    } else if (resultCode == Activity.RESULT_OK && reqCode == TRANSFER_CURRENCY) {
+      getApplicationPreferencesActivity().pushFragment(new DeleteAccountFragment());
     }
+  }
+
+  private @NonNull ApplicationPreferencesActivity getApplicationPreferencesActivity() {
+    return (ApplicationPreferencesActivity) requireActivity();
   }
 
   private void initializePushMessagingToggle() {
@@ -120,7 +162,7 @@ public class AdvancedPreferenceFragment extends CorrectedPreferenceFragment {
 
     if (TextSecurePreferences.isPushRegistered(getActivity())) {
       preference.setChecked(true);
-      preference.setSummary(TextSecurePreferences.getLocalNumber(getActivity()));
+      preference.setSummary(PhoneNumberFormatter.prettyPrint(TextSecurePreferences.getLocalNumber(getActivity())));
     } else {
       preference.setChecked(false);
       preference.setSummary(R.string.preferences__free_private_messages_and_calls);

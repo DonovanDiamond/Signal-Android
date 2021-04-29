@@ -18,8 +18,8 @@
 package org.thoughtcrime.securesms.crypto;
 
 import androidx.annotation.NonNull;
-import org.thoughtcrime.securesms.logging.Log;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.util.Base64;
 import org.thoughtcrime.securesms.util.Hex;
 import org.whispersystems.libsignal.InvalidMessageException;
@@ -55,7 +55,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 public class MasterCipher {
 
-  private static final String TAG = MasterCipher.class.getSimpleName();
+  private static final String TAG = Log.tag(MasterCipher.class);
 
   private final MasterSecret masterSecret;
   private final Cipher encryptingCipher;

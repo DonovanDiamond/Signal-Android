@@ -7,14 +7,14 @@ import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import com.google.i18n.phonenumbers.Phonenumber;
 import com.google.i18n.phonenumbers.ShortNumberInfo;
 
-import org.thoughtcrime.securesms.logging.Log;
+import org.signal.core.util.logging.Log;
 
 import java.util.HashSet;
 import java.util.Set;
 
 public class ShortCodeUtil {
 
-  private static final String TAG = ShortCodeUtil.class.getSimpleName();
+  private static final String TAG = Log.tag(ShortCodeUtil.class);
 
   private static final Set<String> SHORT_COUNTRIES = new HashSet<String>() {{
     add("NU");

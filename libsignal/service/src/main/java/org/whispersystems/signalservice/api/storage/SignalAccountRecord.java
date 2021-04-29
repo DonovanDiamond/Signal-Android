@@ -2,7 +2,9 @@ package org.whispersystems.signalservice.api.storage;
 
 import com.google.protobuf.ByteString;
 
+import org.whispersystems.libsignal.logging.Log;
 import org.whispersystems.libsignal.util.guava.Optional;
+import org.whispersystems.signalservice.api.payments.PaymentsConstants;
 import org.whispersystems.signalservice.api.push.SignalServiceAddress;
 import org.whispersystems.signalservice.api.util.OptionalUtil;
 import org.whispersystems.signalservice.api.util.ProtoUtil;
@@ -10,6 +12,8 @@ import org.whispersystems.signalservice.api.util.UuidUtil;
 import org.whispersystems.signalservice.internal.storage.protos.AccountRecord;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 
@@ -24,17 +28,21 @@ public final class SignalAccountRecord implements SignalRecord {
   private final Optional<String>         avatarUrlPath;
   private final Optional<byte[]>         profileKey;
   private final List<PinnedConversation> pinnedConversations;
+  private final boolean                  preferContactAvatars;
+  private final Payments                 payments;
 
   public SignalAccountRecord(StorageId id, AccountRecord proto) {
     this.id               = id;
     this.proto            = proto;
     this.hasUnknownFields = ProtoUtil.hasUnknownFields(proto);
 
-    this.givenName           = OptionalUtil.absentIfEmpty(proto.getGivenName());
-    this.familyName          = OptionalUtil.absentIfEmpty(proto.getFamilyName());
-    this.profileKey          = OptionalUtil.absentIfEmpty(proto.getProfileKey());
-    this.avatarUrlPath       = OptionalUtil.absentIfEmpty(proto.getAvatarUrlPath());
-    this.pinnedConversations = new ArrayList<>(proto.getPinnedConversationsCount());
+    this.givenName            = OptionalUtil.absentIfEmpty(proto.getGivenName());
+    this.familyName           = OptionalUtil.absentIfEmpty(proto.getFamilyName());
+    this.profileKey           = OptionalUtil.absentIfEmpty(proto.getProfileKey());
+    this.avatarUrlPath        = OptionalUtil.absentIfEmpty(proto.getAvatarUrlPath());
+    this.pinnedConversations  = new ArrayList<>(proto.getPinnedConversationsCount());
+    this.preferContactAvatars = proto.getPreferContactAvatars();
+    this.payments             = new Payments(proto.getPayments().getEnabled(), OptionalUtil.absentIfEmpty(proto.getPayments().getEntropy()));
 
     for (AccountRecord.PinnedConversation conversation : proto.getPinnedConversationsList()) {
       pinnedConversations.add(PinnedConversation.fromRemote(conversation));
@@ -44,6 +52,91 @@ public final class SignalAccountRecord implements SignalRecord {
   @Override
   public StorageId getId() {
     return id;
+  }
+
+  @Override
+  public SignalStorageRecord asStorageRecord() {
+    return SignalStorageRecord.forAccount(this);
+  }
+
+  @Override
+  public String describeDiff(SignalRecord other) {
+    if (other instanceof SignalAccountRecord) {
+      SignalAccountRecord that = (SignalAccountRecord) other;
+      List<String>        diff = new LinkedList<>();
+
+      if (!Arrays.equals(this.id.getRaw(), that.id.getRaw())) {
+        diff.add("ID");
+      }
+
+      if (!Objects.equals(this.givenName, that.givenName)) {
+        diff.add("GivenName");
+      }
+
+      if (!Objects.equals(this.familyName, that.familyName)) {
+        diff.add("FamilyName");
+      }
+
+      if (!OptionalUtil.byteArrayEquals(this.profileKey, that.profileKey)) {
+        diff.add("ProfileKey");
+      }
+
+      if (!Objects.equals(this.avatarUrlPath, that.avatarUrlPath)) {
+        diff.add("AvatarUrlPath");
+      }
+
+      if (!Objects.equals(this.isNoteToSelfArchived(), that.isNoteToSelfArchived())) {
+        diff.add("NoteToSelfArchived");
+      }
+
+      if (!Objects.equals(this.isNoteToSelfForcedUnread(), that.isNoteToSelfForcedUnread())) {
+        diff.add("NoteToSelfForcedUnread");
+      }
+
+      if (!Objects.equals(this.isReadReceiptsEnabled(), that.isReadReceiptsEnabled())) {
+        diff.add("ReadReceipts");
+      }
+
+      if (!Objects.equals(this.isTypingIndicatorsEnabled(), that.isTypingIndicatorsEnabled())) {
+        diff.add("TypingIndicators");
+      }
+
+      if (!Objects.equals(this.isSealedSenderIndicatorsEnabled(), that.isSealedSenderIndicatorsEnabled())) {
+        diff.add("SealedSenderIndicators");
+      }
+
+      if (!Objects.equals(this.isLinkPreviewsEnabled(), that.isLinkPreviewsEnabled())) {
+        diff.add("LinkPreviews");
+      }
+
+      if (!Objects.equals(this.getPhoneNumberSharingMode(), that.getPhoneNumberSharingMode())) {
+        diff.add("PhoneNumberSharingMode");
+      }
+
+      if (!Objects.equals(this.isPhoneNumberUnlisted(), that.isPhoneNumberUnlisted())) {
+        diff.add("PhoneNumberUnlisted");
+      }
+
+      if (!Objects.equals(this.pinnedConversations, that.pinnedConversations)) {
+        diff.add("PinnedConversations");
+      }
+
+      if (!Objects.equals(this.preferContactAvatars, that.preferContactAvatars)) {
+        diff.add("PreferContactAvatars");
+      }
+
+      if (!Objects.equals(this.payments, that.payments)) {
+        diff.add("PreferContactAvatars");
+      }
+
+      if (!Objects.equals(this.hasUnknownFields(), that.hasUnknownFields())) {
+        diff.add("UnknownFields");
+      }
+
+      return diff.toString();
+    } else {
+      return "Different class. " + getClass().getSimpleName() + " | " + other.getClass().getSimpleName();
+    }
   }
 
   public boolean hasUnknownFields() {
@@ -104,6 +197,14 @@ public final class SignalAccountRecord implements SignalRecord {
 
   public List<PinnedConversation> getPinnedConversations() {
     return pinnedConversations;
+  }
+
+  public boolean isPreferContactAvatars() {
+    return preferContactAvatars;
+  }
+
+  public Payments getPayments() {
+    return payments;
   }
 
   AccountRecord toProto() {
@@ -214,6 +315,45 @@ public final class SignalAccountRecord implements SignalRecord {
     }
   }
 
+  public static class Payments {
+    private static final String TAG = Payments.class.getSimpleName();
+
+    private final boolean          enabled;
+    private final Optional<byte[]> entropy;
+
+    public Payments(boolean enabled, Optional<byte[]> entropy) {
+      byte[] entropyBytes = entropy.orNull();
+      if (entropyBytes != null && entropyBytes.length != PaymentsConstants.PAYMENTS_ENTROPY_LENGTH) {
+        Log.w(TAG, "Blocked entropy of length " + entropyBytes.length);
+        entropyBytes = null;
+      }
+      this.entropy = Optional.fromNullable(entropyBytes);
+      this.enabled = enabled && this.entropy.isPresent();
+    }
+
+    public boolean isEnabled() {
+      return enabled;
+    }
+
+    public Optional<byte[]> getEntropy() {
+      return entropy;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      Payments payments = (Payments) o;
+      return enabled == payments.enabled &&
+          OptionalUtil.byteArrayEquals(entropy, payments.entropy);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(enabled, entropy);
+    }
+  }
+
   public static final class Builder {
     private final StorageId             id;
     private final AccountRecord.Builder builder;
@@ -296,6 +436,28 @@ public final class SignalAccountRecord implements SignalRecord {
       for (PinnedConversation pinned : pinnedConversations) {
         builder.addPinnedConversations(pinned.toRemote());
       }
+
+      return this;
+    }
+
+    public Builder setPreferContactAvatars(boolean preferContactAvatars) {
+      builder.setPreferContactAvatars(preferContactAvatars);
+
+      return this;
+    }
+
+    public Builder setPayments(boolean enabled, byte[] entropy) {
+      org.whispersystems.signalservice.internal.storage.protos.Payments.Builder paymentsBuilder = org.whispersystems.signalservice.internal.storage.protos.Payments.newBuilder();
+
+      boolean entropyPresent = entropy != null && entropy.length == PaymentsConstants.PAYMENTS_ENTROPY_LENGTH;
+
+      paymentsBuilder.setEnabled(enabled && entropyPresent);
+
+      if (entropyPresent) {
+        paymentsBuilder.setEntropy(ByteString.copyFrom(entropy));
+      }
+
+      builder.setPayments(paymentsBuilder);
 
       return this;
     }

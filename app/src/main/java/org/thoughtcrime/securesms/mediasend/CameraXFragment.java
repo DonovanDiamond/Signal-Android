@@ -35,10 +35,10 @@ import androidx.lifecycle.ViewModelProviders;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.util.Executors;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.LoggingFragment;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.components.TooltipPopup;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.mediasend.camerax.CameraXFlashToggleView;
 import org.thoughtcrime.securesms.mediasend.camerax.CameraXUtil;
 import org.thoughtcrime.securesms.mms.DecryptableStreamUriLoader.DecryptableUri;
@@ -122,14 +122,15 @@ public class CameraXFragment extends LoggingFragment implements CameraFragment {
 
     onOrientationChanged(getResources().getConfiguration().orientation);
 
-    viewModel.getMostRecentMediaItem().observe(this, this::presentRecentItemThumbnail);
-    viewModel.getHudState().observe(this, this::presentHud);
+    viewModel.getMostRecentMediaItem().observe(getViewLifecycleOwner(), this::presentRecentItemThumbnail);
+    viewModel.getHudState().observe(getViewLifecycleOwner(), this::presentHud);
   }
 
   @Override
   public void onResume() {
     super.onResume();
 
+    camera.bindToLifecycle(getViewLifecycleOwner());
     viewModel.onCameraStarted();
     requireActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
     requireActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN);

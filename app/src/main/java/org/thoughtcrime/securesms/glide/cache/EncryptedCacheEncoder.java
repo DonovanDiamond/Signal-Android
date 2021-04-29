@@ -7,7 +7,7 @@ import com.bumptech.glide.load.Encoder;
 import com.bumptech.glide.load.Options;
 import com.bumptech.glide.load.engine.bitmap_recycle.ArrayPool;
 
-import org.thoughtcrime.securesms.logging.Log;
+import org.signal.core.util.logging.Log;
 
 import java.io.File;
 import java.io.IOException;
@@ -17,7 +17,7 @@ import java.net.SocketException;
 
 public class EncryptedCacheEncoder extends EncryptedCoder implements Encoder<InputStream> {
 
-  private static final String TAG = EncryptedCacheEncoder.class.getSimpleName();
+  private static final String TAG = Log.tag(EncryptedCacheEncoder.class);
 
   private final byte[]    secret;
   private final ArrayPool byteArrayPool;

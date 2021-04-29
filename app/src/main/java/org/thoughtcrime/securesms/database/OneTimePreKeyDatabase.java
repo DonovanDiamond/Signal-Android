@@ -4,11 +4,10 @@ package org.thoughtcrime.securesms.database;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+
 import androidx.annotation.Nullable;
-import org.thoughtcrime.securesms.logging.Log;
 
-import net.sqlcipher.database.SQLiteDatabase;
-
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.database.helpers.SQLCipherOpenHelper;
 import org.thoughtcrime.securesms.util.Base64;
 import org.whispersystems.libsignal.InvalidKeyException;
@@ -22,7 +21,7 @@ import java.io.IOException;
 
 public class OneTimePreKeyDatabase extends Database {
 
-  private static final String TAG = OneTimePreKeyDatabase.class.getSimpleName();
+  private static final String TAG = Log.tag(OneTimePreKeyDatabase.class);
 
   public  static final String TABLE_NAME  = "one_time_prekeys";
   private static final String ID          = "_id";

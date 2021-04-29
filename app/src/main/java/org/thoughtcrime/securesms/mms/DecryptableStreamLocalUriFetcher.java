@@ -7,7 +7,7 @@ import android.net.Uri;
 
 import com.bumptech.glide.load.data.StreamLocalUriFetcher;
 
-import org.thoughtcrime.securesms.logging.Log;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.util.MediaUtil;
 
 import java.io.ByteArrayInputStream;
@@ -18,7 +18,7 @@ import java.io.InputStream;
 
 class DecryptableStreamLocalUriFetcher extends StreamLocalUriFetcher {
 
-  private static final String TAG = DecryptableStreamLocalUriFetcher.class.getSimpleName();
+  private static final String TAG = Log.tag(DecryptableStreamLocalUriFetcher.class);
 
   private Context context;
 

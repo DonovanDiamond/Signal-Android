@@ -7,6 +7,8 @@ import androidx.core.util.Consumer;
 import com.annimon.stream.Collectors;
 import com.annimon.stream.Stream;
 
+import org.signal.core.util.concurrent.SignalExecutors;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.database.RecipientDatabase;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.groups.GroupChangeBusyException;
@@ -14,12 +16,11 @@ import org.thoughtcrime.securesms.groups.GroupsV1MigrationUtil;
 import org.thoughtcrime.securesms.jobmanager.Job;
 import org.thoughtcrime.securesms.jobmanager.impl.NetworkConstraint;
 import org.thoughtcrime.securesms.jobs.RetrieveProfileJob;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.recipients.RecipientId;
 import org.thoughtcrime.securesms.recipients.RecipientUtil;
 import org.thoughtcrime.securesms.transport.RetryLaterException;
-import org.thoughtcrime.securesms.util.concurrent.SignalExecutors;
+import org.thoughtcrime.securesms.util.Util;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -83,7 +84,11 @@ final class GroupsV1MigrationRepository {
     }
 
     try {
-      RecipientUtil.ensureUuidsAreAvailable(ApplicationDependencies.getApplication(), group.getParticipants());
+      List<Recipient> registered = Stream.of(group.getParticipants())
+                                         .filter(Recipient::isRegistered)
+                                         .toList();
+
+      RecipientUtil.ensureUuidsAreAvailable(ApplicationDependencies.getApplication(), registered);
     } catch (IOException e) {
       Log.w(TAG, "Failed to refresh UUIDs!", e);
     }

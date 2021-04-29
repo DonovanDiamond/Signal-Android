@@ -1,10 +1,9 @@
 package org.thoughtcrime.securesms.components;
 
 import android.annotation.SuppressLint;
-import android.content.Context;
 
-import androidx.annotation.NonNull;
-
+import org.signal.core.util.ThreadUtil;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.jobs.TypingSendJob;
 import org.thoughtcrime.securesms.util.Util;
@@ -16,16 +15,14 @@ import java.util.concurrent.TimeUnit;
 @SuppressLint("UseSparseArrays")
 public class TypingStatusSender {
 
-  private static final String TAG = TypingStatusSender.class.getSimpleName();
+  private static final String TAG = Log.tag(TypingStatusSender.class);
 
   private static final long REFRESH_TYPING_TIMEOUT = TimeUnit.SECONDS.toMillis(10);
   private static final long PAUSE_TYPING_TIMEOUT   = TimeUnit.SECONDS.toMillis(3);
 
-  private final Context              context;
   private final Map<Long, TimerPair> selfTypingTimers;
 
-  public TypingStatusSender(@NonNull Context context) {
-    this.context          = context;
+  public TypingStatusSender() {
     this.selfTypingTimers = new HashMap<>();
   }
 
@@ -37,16 +34,16 @@ public class TypingStatusSender {
       sendTyping(threadId, true);
 
       Runnable start = new StartRunnable(threadId);
-      Util.runOnMainDelayed(start, REFRESH_TYPING_TIMEOUT);
+      ThreadUtil.runOnMainDelayed(start, REFRESH_TYPING_TIMEOUT);
       pair.setStart(start);
     }
 
     if (pair.getStop() != null) {
-      Util.cancelRunnableOnMain(pair.getStop());
+      ThreadUtil.cancelRunnableOnMain(pair.getStop());
     }
 
     Runnable stop = () -> onTypingStopped(threadId, true);
-    Util.runOnMainDelayed(stop, PAUSE_TYPING_TIMEOUT);
+    ThreadUtil.runOnMainDelayed(stop, PAUSE_TYPING_TIMEOUT);
     pair.setStop(stop);
   }
 
@@ -63,7 +60,7 @@ public class TypingStatusSender {
     selfTypingTimers.put(threadId, pair);
 
     if (pair.getStart() != null) {
-      Util.cancelRunnableOnMain(pair.getStart());
+      ThreadUtil.cancelRunnableOnMain(pair.getStart());
 
       if (notify) {
         sendTyping(threadId, false);
@@ -71,7 +68,7 @@ public class TypingStatusSender {
     }
 
     if (pair.getStop() != null) {
-      Util.cancelRunnableOnMain(pair.getStop());
+      ThreadUtil.cancelRunnableOnMain(pair.getStop());
     }
 
     pair.setStart(null);
@@ -93,7 +90,7 @@ public class TypingStatusSender {
     @Override
     public void run() {
       sendTyping(threadId, true);
-      Util.runOnMainDelayed(this, REFRESH_TYPING_TIMEOUT);
+      ThreadUtil.runOnMainDelayed(this, REFRESH_TYPING_TIMEOUT);
     }
   }
 

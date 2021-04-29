@@ -18,12 +18,14 @@ package org.thoughtcrime.securesms.preferences.widgets;
 
 import android.content.Context;
 import android.graphics.drawable.GradientDrawable;
-import androidx.annotation.NonNull;
-import androidx.preference.ListPreference;
-import androidx.preference.PreferenceViewHolder;
 import android.util.AttributeSet;
 import android.widget.ImageView;
 
+import androidx.annotation.NonNull;
+import androidx.preference.ListPreference;
+import androidx.preference.PreferenceViewHolder;
+
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.R;
 
 /**
@@ -34,7 +36,7 @@ import org.thoughtcrime.securesms.R;
 
 public class LEDColorListPreference extends ListPreference {
 
-  private static final String TAG = LEDColorListPreference.class.getSimpleName();
+  private static final String TAG = Log.tag(LEDColorListPreference.class);
 
   private ImageView colorImageView;
 

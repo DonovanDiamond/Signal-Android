@@ -2,25 +2,20 @@ package org.thoughtcrime.securesms.components;
 
 import android.content.Context;
 import android.content.res.TypedArray;
-import android.graphics.Color;
-import android.os.Build;
 import android.util.AttributeSet;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.animation.Animation;
 import android.view.animation.LinearInterpolator;
 import android.view.animation.RotateAnimation;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
-import android.widget.TextView;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.R;
-
-import pl.tajchert.sample.DotsTextView;
 
 public class DeliveryStatusView extends FrameLayout {
 
-  private static final String TAG = DeliveryStatusView.class.getSimpleName();
+  private static final String TAG = Log.tag(DeliveryStatusView.class);
 
   private static final RotateAnimation ROTATION_ANIMATION = new RotateAnimation(0, 360f,
                                                                                 Animation.RELATIVE_TO_SELF, 0.5f,

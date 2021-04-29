@@ -21,12 +21,11 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
-import androidx.annotation.NonNull;
-import androidx.core.app.ActivityCompat;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 
-import org.thoughtcrime.securesms.logging.Log;
+import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
 
 import org.apache.http.Header;
 import org.apache.http.auth.AuthScope;
@@ -42,11 +41,12 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.client.LaxRedirectStrategy;
 import org.apache.http.impl.conn.BasicHttpClientConnectionManager;
 import org.apache.http.message.BasicHeader;
+import org.signal.core.util.StreamUtil;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.database.ApnDatabase;
 import org.thoughtcrime.securesms.util.ServiceUtil;
 import org.thoughtcrime.securesms.util.TelephonyUtil;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
-import org.thoughtcrime.securesms.util.Util;
 import org.whispersystems.libsignal.util.guava.Optional;
 
 import java.io.BufferedInputStream;
@@ -67,7 +67,7 @@ public abstract class LegacyMmsConnection {
 
   public static final String USER_AGENT = "Android-Mms/2.0";
 
-  private static final String TAG = LegacyMmsConnection.class.getSimpleName();
+  private static final String TAG = Log.tag(LegacyMmsConnection.class);
 
   protected final Context context;
   protected final Apn     apn;
@@ -155,7 +155,7 @@ public abstract class LegacyMmsConnection {
   protected static byte[] parseResponse(InputStream is) throws IOException {
     InputStream           in   = new BufferedInputStream(is);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    Util.copy(in, baos);
+    StreamUtil.copy(in, baos);
 
     Log.i(TAG, "Received full server response, " + baos.size() + " bytes");
 
@@ -302,7 +302,7 @@ public abstract class LegacyMmsConnection {
 
     @Override
     public @NonNull String toString() {
-      return Apn.class.getSimpleName() +
+      return Log.tag(Apn.class) +
           "{ mmsc: \"" + mmsc + "\"" +
           ", proxy: " + (proxy == null ? "none" : '"' + proxy + '"') +
           ", port: " + (port == null ? "(none)" : port) +

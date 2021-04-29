@@ -6,18 +6,22 @@ import androidx.annotation.NonNull;
 
 import com.annimon.stream.Stream;
 
+import org.signal.core.util.logging.Log;
 import org.signal.ringrtc.CallException;
+import org.signal.ringrtc.CallManager;
 import org.signal.ringrtc.GroupCall;
 import org.signal.ringrtc.PeekInfo;
 import org.thoughtcrime.securesms.BuildConfig;
 import org.thoughtcrime.securesms.components.webrtc.BroadcastVideoSink;
 import org.thoughtcrime.securesms.events.CallParticipant;
+import org.thoughtcrime.securesms.events.CallParticipantId;
 import org.thoughtcrime.securesms.events.WebRtcViewModel;
-import org.thoughtcrime.securesms.logging.Log;
+import org.thoughtcrime.securesms.keyvalue.SignalStore;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.ringrtc.RemotePeer;
 import org.thoughtcrime.securesms.service.webrtc.state.WebRtcServiceState;
 import org.thoughtcrime.securesms.service.webrtc.state.WebRtcServiceStateBuilder;
+import org.thoughtcrime.securesms.util.NetworkUtil;
 import org.thoughtcrime.securesms.util.ServiceUtil;
 import org.whispersystems.signalservice.api.messages.calls.OfferMessage;
 
@@ -49,6 +53,7 @@ public class GroupPreJoinActionProcessor extends GroupActionProcessor {
     try {
       groupCall.setOutgoingAudioMuted(true);
       groupCall.setOutgoingVideoMuted(true);
+      groupCall.setBandwidthMode(NetworkUtil.getCallingBandwidthMode(context));
 
       Log.i(TAG, "Connecting to group call: " + currentState.getCallInfoState().getCallRecipient().getId());
       groupCall.connect();
@@ -56,6 +61,7 @@ public class GroupPreJoinActionProcessor extends GroupActionProcessor {
       return groupCallFailure(currentState, "Unable to connect to group call", e);
     }
 
+    SignalStore.tooltips().markGroupCallingLobbyEntered();
     return currentState.builder()
                        .changeCallInfoState()
                        .groupCall(groupCall)
@@ -111,10 +117,13 @@ public class GroupPreJoinActionProcessor extends GroupActionProcessor {
                                              .toList();
 
     WebRtcServiceStateBuilder.CallInfoStateBuilder builder = currentState.builder()
-                                                                         .changeCallInfoState();
+                                                                         .changeCallInfoState()
+                                                                         .remoteDevicesCount(peekInfo.getDeviceCount())
+                                                                         .participantLimit(peekInfo.getMaxDevices())
+                                                                         .clearParticipantMap();
 
     for (Recipient recipient : callParticipants) {
-      builder.putParticipant(recipient, CallParticipant.createRemote(recipient, null, new BroadcastVideoSink(null), true, true));
+      builder.putParticipant(recipient, CallParticipant.createRemote(new CallParticipantId(recipient), recipient, null, new BroadcastVideoSink(null), true, true, 0, false, 0, CallParticipant.DeviceOrdinal.PRIMARY));
     }
 
     return builder.build();
@@ -136,14 +145,14 @@ public class GroupPreJoinActionProcessor extends GroupActionProcessor {
 
     webRtcInteractor.updatePhoneState(WebRtcUtil.getInCallPhoneState(context));
     webRtcInteractor.initializeAudioForCall();
-    webRtcInteractor.setWantsBluetoothConnection(true);
     webRtcInteractor.setCallInProgressNotification(TYPE_OUTGOING_RINGING, currentState.getCallInfoState().getCallRecipient());
+    webRtcInteractor.setWantsBluetoothConnection(true);
 
     try {
       groupCall.setOutgoingVideoSource(currentState.getVideoState().requireLocalSink(), currentState.getVideoState().requireCamera());
       groupCall.setOutgoingVideoMuted(!currentState.getLocalDeviceState().getCameraState().isEnabled());
       groupCall.setOutgoingAudioMuted(!currentState.getLocalDeviceState().isMicrophoneEnabled());
-      groupCall.setBandwidthMode(GroupCall.BandwidthMode.NORMAL);
+      groupCall.setBandwidthMode(NetworkUtil.getCallingBandwidthMode(context));
 
       groupCall.join();
     } catch (CallException e) {
@@ -155,6 +164,9 @@ public class GroupPreJoinActionProcessor extends GroupActionProcessor {
                        .changeCallInfoState()
                        .callState(WebRtcViewModel.State.CALL_OUTGOING)
                        .groupCallState(WebRtcViewModel.GroupCallState.CONNECTED_AND_JOINING)
+                       .commit()
+                       .changeLocalDeviceState()
+                       .wantsBluetooth(true)
                        .build();
   }
 
@@ -180,5 +192,18 @@ public class GroupPreJoinActionProcessor extends GroupActionProcessor {
                        .changeLocalDeviceState()
                        .isMicrophoneEnabled(!muted)
                        .build();
+  }
+
+  @Override
+  public @NonNull WebRtcServiceState handleNetworkChanged(@NonNull WebRtcServiceState currentState, boolean available) {
+    if (!available) {
+      return currentState.builder()
+                         .actionProcessor(new GroupNetworkUnavailableActionProcessor(webRtcInteractor))
+                         .changeCallInfoState()
+                         .callState(WebRtcViewModel.State.NETWORK_FAILURE)
+                         .build();
+    } else {
+      return currentState;
+    }
   }
 }

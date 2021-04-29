@@ -3,9 +3,9 @@ package org.thoughtcrime.securesms.messagedetails;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.drawable.ColorDrawable;
-import android.os.Build;
 import android.os.Bundle;
 import android.view.MenuItem;
+import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
 import androidx.lifecycle.ViewModelProviders;
@@ -16,6 +16,9 @@ import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.color.MaterialColor;
 import org.thoughtcrime.securesms.database.MmsSmsDatabase;
 import org.thoughtcrime.securesms.database.model.MessageRecord;
+import org.thoughtcrime.securesms.giph.mp4.GiphyMp4PlaybackController;
+import org.thoughtcrime.securesms.giph.mp4.GiphyMp4ProjectionPlayerHolder;
+import org.thoughtcrime.securesms.giph.mp4.GiphyMp4ProjectionRecycler;
 import org.thoughtcrime.securesms.messagedetails.MessageDetailsAdapter.MessageDetailsViewState;
 import org.thoughtcrime.securesms.messagedetails.MessageDetailsViewModel.Factory;
 import org.thoughtcrime.securesms.mms.GlideApp;
@@ -40,7 +43,7 @@ public final class MessageDetailsActivity extends PassphraseRequiredActivity {
   private MessageDetailsViewModel viewModel;
   private MessageDetailsAdapter   adapter;
 
-  private DynamicTheme dynamicTheme = new DynamicDarkActionBarTheme();
+  private DynamicTheme dynamicTheme = new DynamicTheme();
 
   public static @NonNull Intent getIntentForMessageDetails(@NonNull Context context, @NonNull MessageRecord message, @NonNull RecipientId recipientId, long threadId) {
     Intent intent = new Intent(context, MessageDetailsActivity.class);
@@ -66,6 +69,7 @@ public final class MessageDetailsActivity extends PassphraseRequiredActivity {
     initializeList();
     initializeViewModel();
     initializeActionBar();
+    initializeVideoPlayer();
   }
 
   @Override
@@ -114,18 +118,18 @@ public final class MessageDetailsActivity extends PassphraseRequiredActivity {
     });
   }
 
-  private void initializeActionBar() {
-    assert getSupportActionBar() != null;
-    getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+  private void initializeVideoPlayer() {
+    FrameLayout                          videoContainer = findViewById(R.id.video_container);
+    RecyclerView                         recyclerView   = findViewById(R.id.message_details_list);
+    List<GiphyMp4ProjectionPlayerHolder> holders        = GiphyMp4ProjectionPlayerHolder.injectVideoViews(this, getLifecycle(), videoContainer, 1);
+    GiphyMp4ProjectionRecycler           callback       = new GiphyMp4ProjectionRecycler(holders);
 
-    viewModel.getRecipientColor().observe(this, this::setActionBarColor);
+    GiphyMp4PlaybackController.attach(recyclerView, callback, 1);
   }
 
-  private void setActionBarColor(MaterialColor color) {
-    assert getSupportActionBar() != null;
-    getSupportActionBar().setBackgroundDrawable(new ColorDrawable(color.toActionBarColor(this)));
-
-    WindowUtil.setStatusBarColor(getWindow(), color.toStatusBarColor(this));
+  private void initializeActionBar() {
+    requireSupportActionBar().setDisplayHomeAsUpEnabled(true);
+    requireSupportActionBar().setTitle(R.string.AndroidManifest__message_details);
   }
 
   private List<MessageDetailsViewState<?>> convertToRows(MessageDetails details) {

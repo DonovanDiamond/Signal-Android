@@ -5,11 +5,13 @@ import android.hardware.Camera;
 import android.hardware.Camera.CameraInfo;
 import android.hardware.Camera.Parameters;
 import android.hardware.Camera.Size;
+import android.util.DisplayMetrics;
+import android.view.Surface;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import android.util.DisplayMetrics;
-import org.thoughtcrime.securesms.logging.Log;
-import android.view.Surface;
+
+import org.signal.core.util.logging.Log;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -19,7 +21,7 @@ import java.util.Locale;
 
 @SuppressWarnings("deprecation")
 public class CameraUtils {
-  private static final String TAG = CameraUtils.class.getSimpleName();
+  private static final String TAG = Log.tag(CameraUtils.class);
   /*
    * modified from: https://github.com/commonsguy/cwac-camera/blob/master/camera/src/com/commonsware/cwac/camera/CameraUtils.java
    */

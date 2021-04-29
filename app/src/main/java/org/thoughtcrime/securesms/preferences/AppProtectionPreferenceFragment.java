@@ -28,6 +28,8 @@ import androidx.preference.Preference;
 
 import com.google.android.material.snackbar.Snackbar;
 
+import org.signal.core.util.concurrent.SignalExecutors;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.ApplicationPreferencesActivity;
 import org.thoughtcrime.securesms.PassphraseChangeActivity;
 import org.thoughtcrime.securesms.R;
@@ -37,6 +39,7 @@ import org.thoughtcrime.securesms.contactshare.SimpleTextWatcher;
 import org.thoughtcrime.securesms.crypto.MasterSecretUtil;
 import org.thoughtcrime.securesms.database.DatabaseFactory;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
+import org.thoughtcrime.securesms.jobs.ConversationShortcutUpdateJob;
 import org.thoughtcrime.securesms.jobs.MultiDeviceConfigurationUpdateJob;
 import org.thoughtcrime.securesms.jobs.RefreshAttributesJob;
 import org.thoughtcrime.securesms.keyvalue.KbsValues;
@@ -48,18 +51,17 @@ import org.thoughtcrime.securesms.lock.PinHashing;
 import org.thoughtcrime.securesms.lock.v2.CreateKbsPinActivity;
 import org.thoughtcrime.securesms.lock.v2.KbsConstants;
 import org.thoughtcrime.securesms.lock.v2.RegistrationLockUtil;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.megaphone.Megaphones;
 import org.thoughtcrime.securesms.pin.RegistrationLockV2Dialog;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.service.KeyCachingService;
 import org.thoughtcrime.securesms.storage.StorageSyncHelper;
 import org.thoughtcrime.securesms.util.CommunicationActions;
+import org.thoughtcrime.securesms.util.ConversationUtil;
 import org.thoughtcrime.securesms.util.FeatureFlags;
 import org.thoughtcrime.securesms.util.ServiceUtil;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
 import org.thoughtcrime.securesms.util.ThemeUtil;
-import org.thoughtcrime.securesms.util.concurrent.SignalExecutors;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -70,6 +72,7 @@ import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import mobi.upod.timedurationpicker.TimeDurationPickerDialog;
+import mobi.upod.timedurationpicker.TimeDurationPicker;
 
 public class AppProtectionPreferenceFragment extends CorrectedPreferenceFragment {
 
@@ -77,6 +80,7 @@ public class AppProtectionPreferenceFragment extends CorrectedPreferenceFragment
 
   private static final String PREFERENCE_CATEGORY_BLOCKED             = "preference_category_blocked";
   private static final String PREFERENCE_UNIDENTIFIED_LEARN_MORE      = "pref_unidentified_learn_more";
+  private static final String PREFERENCE_INCOGNITO_LEARN_MORE         = "pref_incognito_learn_more";
   private static final String PREFERENCE_WHO_CAN_SEE_PHONE_NUMBER     = "pref_who_can_see_phone_number";
   private static final String PREFERENCE_WHO_CAN_FIND_BY_PHONE_NUMBER = "pref_who_can_find_by_phone_number";
 
@@ -107,6 +111,7 @@ public class AppProtectionPreferenceFragment extends CorrectedPreferenceFragment
     this.findPreference(TextSecurePreferences.SHOW_UNIDENTIFIED_DELIVERY_INDICATORS).setOnPreferenceChangeListener(new ShowUnidentifiedDeliveryIndicatorsChangedListener());
     this.findPreference(TextSecurePreferences.UNIVERSAL_UNIDENTIFIED_ACCESS).setOnPreferenceChangeListener(new UniversalUnidentifiedAccessChangedListener());
     this.findPreference(PREFERENCE_UNIDENTIFIED_LEARN_MORE).setOnPreferenceClickListener(new UnidentifiedLearnMoreClickListener());
+    this.findPreference(PREFERENCE_INCOGNITO_LEARN_MORE).setOnPreferenceClickListener(new IncognitoLearnMoreClickListener());
     disablePassphrase.setOnPreferenceChangeListener(new DisablePassphraseClickListener());
 
     if (FeatureFlags.phoneNumberPrivacy()) {
@@ -182,11 +187,10 @@ public class AppProtectionPreferenceFragment extends CorrectedPreferenceFragment
     long timeoutSeconds = TextSecurePreferences.getScreenLockTimeout(getContext());
     long hours          = TimeUnit.SECONDS.toHours(timeoutSeconds);
     long minutes        = TimeUnit.SECONDS.toMinutes(timeoutSeconds) - (TimeUnit.SECONDS.toHours(timeoutSeconds) * 60  );
-    long seconds        = TimeUnit.SECONDS.toSeconds(timeoutSeconds) - (TimeUnit.SECONDS.toMinutes(timeoutSeconds) * 60);
 
     findPreference(TextSecurePreferences.SCREEN_LOCK_TIMEOUT)
         .setSummary(timeoutSeconds <= 0 ? getString(R.string.AppProtectionPreferenceFragment_none) :
-                                          String.format(Locale.getDefault(), "%02d:%02d:%02d", hours, minutes, seconds));
+                                          String.format(Locale.getDefault(), "%02d:%02d:00", hours, minutes));
   }
 
   private void initializePhoneNumberPrivacyWhoCanSeeSummary() {
@@ -231,12 +235,17 @@ public class AppProtectionPreferenceFragment extends CorrectedPreferenceFragment
   private class ScreenLockListener implements Preference.OnPreferenceChangeListener {
     @Override
     public boolean onPreferenceChange(Preference preference, Object newValue) {
+      Log.w(TAG, "Screen lock preference changed: " + newValue);
+
       boolean enabled = (Boolean)newValue;
       TextSecurePreferences.setScreenLockEnabled(getContext(), enabled);
 
       Intent intent = new Intent(getContext(), KeyCachingService.class);
       intent.setAction(KeyCachingService.LOCK_TOGGLED_EVENT);
       getContext().startService(intent);
+
+      ConversationUtil.refreshRecipientShortcuts();
+
       return true;
     }
   }
@@ -246,15 +255,11 @@ public class AppProtectionPreferenceFragment extends CorrectedPreferenceFragment
     @Override
     public boolean onPreferenceClick(Preference preference) {
       new TimeDurationPickerDialog(getContext(), (view, duration) -> {
-        if (duration == 0) {
-          TextSecurePreferences.setScreenLockTimeout(getContext(), 0);
-        } else {
-          long timeoutSeconds = Math.max(TimeUnit.MILLISECONDS.toSeconds(duration), 60);
-          TextSecurePreferences.setScreenLockTimeout(getContext(), timeoutSeconds);
-        }
+        long timeoutSeconds = TimeUnit.MILLISECONDS.toSeconds(duration);
+        TextSecurePreferences.setScreenLockTimeout(getContext(), timeoutSeconds);
 
         initializeScreenLockTimeoutSummary();
-      }, 0).show();
+      }, 0, TimeDurationPicker.HH_MM).show();
 
       return true;
     }
@@ -390,7 +395,7 @@ public class AppProtectionPreferenceFragment extends CorrectedPreferenceFragment
 
         initializePassphraseTimeoutSummary();
 
-      }, 0).show();
+      }, 0, TimeDurationPicker.HH_MM).show();
 
       return true;
     }
@@ -459,6 +464,14 @@ public class AppProtectionPreferenceFragment extends CorrectedPreferenceFragment
     @Override
     public boolean onPreferenceClick(Preference preference) {
       CommunicationActions.openBrowserLink(preference.getContext(), "https://signal.org/blog/sealed-sender/");
+      return true;
+    }
+  }
+
+  private class IncognitoLearnMoreClickListener implements Preference.OnPreferenceClickListener {
+    @Override
+    public boolean onPreferenceClick(Preference preference) {
+      CommunicationActions.openBrowserLink(preference.getContext(), "https://support.signal.org/hc/en-us/articles/360055276112");
       return true;
     }
   }

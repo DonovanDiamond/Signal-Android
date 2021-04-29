@@ -4,14 +4,15 @@ package org.thoughtcrime.securesms.database.helpers;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.text.TextUtils;
+import android.util.Pair;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import android.text.TextUtils;
-import org.thoughtcrime.securesms.logging.Log;
-import android.util.Pair;
 
 import com.annimon.stream.function.BiFunction;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.crypto.AsymmetricMasterCipher;
 import org.thoughtcrime.securesms.crypto.AttachmentSecretProvider;
@@ -30,7 +31,7 @@ import java.util.Set;
 
 public class SQLCipherMigrationHelper {
 
-  private static final String TAG = SQLCipherMigrationHelper.class.getSimpleName();
+  private static final String TAG = Log.tag(SQLCipherMigrationHelper.class);
 
   private static final long ENCRYPTION_SYMMETRIC_BIT  = 0x80000000;
   private static final long ENCRYPTION_ASYMMETRIC_BIT = 0x40000000;

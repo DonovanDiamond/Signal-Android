@@ -11,9 +11,10 @@ import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import com.google.i18n.phonenumbers.Phonenumber;
 import com.google.i18n.phonenumbers.ShortNumberInfo;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.groups.GroupId;
-import org.thoughtcrime.securesms.logging.Log;
+import org.thoughtcrime.securesms.util.StringUtil;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
 import org.thoughtcrime.securesms.util.Util;
 import org.whispersystems.libsignal.util.Pair;
@@ -28,7 +29,7 @@ import java.util.regex.Pattern;
 
 public class PhoneNumberFormatter {
 
-  private static final String TAG = PhoneNumberFormatter.class.getSimpleName();
+  private static final String TAG = Log.tag(PhoneNumberFormatter.class);
 
   private static final Set<String> SHORT_COUNTRIES = new HashSet<String>() {{
     add("NU");
@@ -99,15 +100,21 @@ public class PhoneNumberFormatter {
           localNumber.get().countryCode == parsedNumber.getCountryCode() &&
           NATIONAL_FORMAT_COUNTRY_CODES.contains(localNumber.get().getCountryCode()))
       {
-        return phoneNumberUtil.format(parsedNumber, PhoneNumberUtil.PhoneNumberFormat.NATIONAL);
+        return StringUtil.isolateBidi(phoneNumberUtil.format(parsedNumber, PhoneNumberUtil.PhoneNumberFormat.NATIONAL));
       } else {
-        return phoneNumberUtil.format(parsedNumber, PhoneNumberUtil.PhoneNumberFormat.INTERNATIONAL);
+        return StringUtil.isolateBidi(phoneNumberUtil.format(parsedNumber, PhoneNumberUtil.PhoneNumberFormat.INTERNATIONAL));
       }
     } catch (NumberParseException e) {
       Log.w(TAG, "Failed to format number.");
-      return e164;
+      return StringUtil.isolateBidi(e164);
     }
   }
+
+  public static int getLocalCountryCode() {
+    Optional<PhoneNumber> localNumber = get(ApplicationDependencies.getApplication()).localNumber;
+    return localNumber != null && localNumber.isPresent() ? localNumber.get().countryCode : 0;
+  }
+
 
   public String format(@Nullable String number) {
     if (number == null)                       return "Unknown";

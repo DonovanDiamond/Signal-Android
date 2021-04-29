@@ -9,13 +9,13 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
+import org.signal.core.util.concurrent.SignalExecutors;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.messages.BackgroundMessageRetriever;
 import org.thoughtcrime.securesms.messages.RestStrategy;
 import org.thoughtcrime.securesms.util.ServiceUtil;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
-import org.thoughtcrime.securesms.util.concurrent.SignalExecutors;
 
 /**
  * Pulls down messages. Used when we fail to pull down messages in {@link FcmReceiveService}.
@@ -23,7 +23,7 @@ import org.thoughtcrime.securesms.util.concurrent.SignalExecutors;
 @RequiresApi(26)
 public class FcmJobService extends JobService {
 
-  private static final String TAG = FcmJobService.class.getSimpleName();
+  private static final String TAG = Log.tag(FcmJobService.class);
 
   private static final int ID = 1337;
 

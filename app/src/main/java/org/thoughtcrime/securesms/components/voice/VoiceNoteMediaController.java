@@ -5,6 +5,7 @@ import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.os.RemoteException;
 import android.support.v4.media.MediaBrowserCompat;
@@ -20,7 +21,7 @@ import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
-import org.thoughtcrime.securesms.logging.Log;
+import org.signal.core.util.logging.Log;
 
 import java.util.Objects;
 
@@ -208,21 +209,25 @@ public class VoiceNoteMediaController implements DefaultLifecycleObserver {
 
   private static class ProgressEventHandler extends Handler {
 
-    private final MediaControllerCompat                    mediaController;
-    private final MutableLiveData<VoiceNotePlaybackState>  voiceNotePlaybackState;
+    private final MediaControllerCompat                   mediaController;
+    private final MutableLiveData<VoiceNotePlaybackState> voiceNotePlaybackState;
 
     private ProgressEventHandler(@NonNull MediaControllerCompat mediaController,
-                                 @NonNull MutableLiveData<VoiceNotePlaybackState> voiceNotePlaybackState) {
+                                 @NonNull MutableLiveData<VoiceNotePlaybackState> voiceNotePlaybackState)
+    {
+      super(Looper.getMainLooper());
+
       this.mediaController        = mediaController;
       this.voiceNotePlaybackState = voiceNotePlaybackState;
     }
 
     @Override
-    public void handleMessage(Message msg) {
+    public void handleMessage(@NonNull Message msg) {
       MediaMetadataCompat mediaMetadataCompat = mediaController.getMetadata();
       if (isPlayerActive(mediaController.getPlaybackState()) &&
           mediaMetadataCompat != null                        &&
-          mediaMetadataCompat.getDescription() != null)
+          mediaMetadataCompat.getDescription() != null       &&
+          mediaMetadataCompat.getDescription().getMediaUri() != null)
       {
 
         Uri                    mediaUri      = Objects.requireNonNull(mediaMetadataCompat.getDescription().getMediaUri());

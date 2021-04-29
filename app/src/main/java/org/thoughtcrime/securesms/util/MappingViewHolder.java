@@ -5,10 +5,7 @@ import android.view.View;
 
 import androidx.annotation.IdRes;
 import androidx.annotation.NonNull;
-import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleOwner;
-import androidx.lifecycle.LifecycleRegistry;
-import androidx.recyclerview.widget.RecyclerView;
 
 public abstract class MappingViewHolder<Model extends MappingModel<Model>> extends LifecycleViewHolder implements LifecycleOwner {
 
@@ -28,4 +25,13 @@ public abstract class MappingViewHolder<Model extends MappingModel<Model>> exten
   }
 
   public abstract void bind(@NonNull Model model);
+
+  public static final class SimpleViewHolder<Model extends MappingModel<Model>> extends MappingViewHolder<Model> {
+    public SimpleViewHolder(@NonNull View itemView) {
+      super(itemView);
+    }
+
+    @Override
+    public void bind(@NonNull Model model) { }
+  }
 }

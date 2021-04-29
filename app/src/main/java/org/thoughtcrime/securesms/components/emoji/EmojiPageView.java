@@ -1,20 +1,22 @@
 package org.thoughtcrime.securesms.components.emoji;
 
 import android.content.Context;
-import androidx.annotation.NonNull;
-import androidx.recyclerview.widget.GridLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.FrameLayout;
 
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.components.emoji.EmojiKeyboardProvider.EmojiEventListener;
 import org.thoughtcrime.securesms.components.emoji.EmojiPageViewGridAdapter.VariationSelectorListener;
 
 public class EmojiPageView extends FrameLayout implements VariationSelectorListener {
-  private static final String TAG = EmojiPageView.class.getSimpleName();
+  private static final String TAG = Log.tag(EmojiPageView.class);
 
   private EmojiPageModel                   model;
   private EmojiPageViewGridAdapter         adapter;

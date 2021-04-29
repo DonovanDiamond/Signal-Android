@@ -14,8 +14,10 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
+
 import androidx.core.app.NotificationCompat;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.MainActivity;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.database.SmsMigrator;
@@ -31,7 +33,7 @@ import java.util.concurrent.Executors;
 public class ApplicationMigrationService extends Service
     implements SmsMigrator.SmsMigrationProgressListener
 {
-  private static final String TAG               = ApplicationMigrationService.class.getSimpleName();
+  private static final String TAG               = Log.tag(ApplicationMigrationService.class);
   public  static final String MIGRATE_DATABASE  = "org.thoughtcrime.securesms.ApplicationMigration.MIGRATE_DATABSE";
   public  static final String COMPLETED_ACTION  = "org.thoughtcrime.securesms.ApplicationMigrationService.COMPLETED";
   private static final String PREFERENCES_NAME  = "SecureSMS";
@@ -135,7 +137,7 @@ public class ApplicationMigrationService extends Service
     builder.setOngoing(true);
     builder.setProgress(100, 0, false);
     // TODO [greyson] Navigation
-    builder.setContentIntent(PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), 0));
+    builder.setContentIntent(PendingIntent.getActivity(this, 0, MainActivity.clearTop(this), 0));
 
     stopForeground(true);
     startForeground(NotificationIds.APPLICATION_MIGRATION, builder.build());
@@ -187,7 +189,7 @@ public class ApplicationMigrationService extends Service
       builder.setContentTitle(context.getString(R.string.ApplicationMigrationService_import_complete));
       builder.setContentText(context.getString(R.string.ApplicationMigrationService_system_database_import_is_complete));
       // TODO [greyson] Navigation
-      builder.setContentIntent(PendingIntent.getActivity(context, 0, new Intent(context, MainActivity.class), 0));
+      builder.setContentIntent(PendingIntent.getActivity(context, 0, MainActivity.clearTop(context), 0));
       builder.setWhen(System.currentTimeMillis());
       builder.setDefaults(Notification.DEFAULT_VIBRATE);
       builder.setAutoCancel(true);

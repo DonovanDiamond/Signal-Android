@@ -2,17 +2,16 @@ package org.thoughtcrime.securesms.database;
 
 import androidx.annotation.NonNull;
 
-import org.thoughtcrime.securesms.logging.Log;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.recipients.RecipientId;
 import org.thoughtcrime.securesms.util.LRUCache;
 
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 
 public class EarlyReceiptCache {
 
-  private static final String TAG = EarlyReceiptCache.class.getSimpleName();
+  private static final String TAG = Log.tag(EarlyReceiptCache.class);
 
   private final LRUCache<Long, Map<RecipientId, Long>> cache = new LRUCache<>(100);
   private final String name;

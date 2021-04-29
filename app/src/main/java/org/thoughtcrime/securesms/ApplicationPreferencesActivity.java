@@ -23,6 +23,7 @@ import android.content.SharedPreferences;
 import android.graphics.PorterDuff;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -31,28 +32,34 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.preference.Preference;
 
+import org.signal.core.util.logging.Log;
+import org.thoughtcrime.securesms.conversationlist.model.UnreadPayments;
+import org.thoughtcrime.securesms.conversationlist.model.UnreadPaymentsLiveData;
 import org.thoughtcrime.securesms.help.HelpFragment;
 import org.thoughtcrime.securesms.keyvalue.SignalStore;
+import org.thoughtcrime.securesms.payments.preferences.PaymentsActivity;
 import org.thoughtcrime.securesms.preferences.AdvancedPreferenceFragment;
 import org.thoughtcrime.securesms.preferences.AppProtectionPreferenceFragment;
 import org.thoughtcrime.securesms.preferences.AppearancePreferenceFragment;
 import org.thoughtcrime.securesms.preferences.BackupsPreferenceFragment;
 import org.thoughtcrime.securesms.preferences.ChatsPreferenceFragment;
 import org.thoughtcrime.securesms.preferences.CorrectedPreferenceFragment;
+import org.thoughtcrime.securesms.preferences.DataAndStoragePreferenceFragment;
+import org.thoughtcrime.securesms.preferences.EditProxyFragment;
 import org.thoughtcrime.securesms.preferences.NotificationsPreferenceFragment;
 import org.thoughtcrime.securesms.preferences.SmsMmsPreferenceFragment;
-import org.thoughtcrime.securesms.preferences.StoragePreferenceFragment;
+import org.thoughtcrime.securesms.preferences.widgets.PaymentsPreference;
 import org.thoughtcrime.securesms.preferences.widgets.ProfilePreference;
 import org.thoughtcrime.securesms.preferences.widgets.UsernamePreference;
-import org.thoughtcrime.securesms.profiles.edit.EditProfileActivity;
+import org.thoughtcrime.securesms.profiles.manage.ManageProfileActivity;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.service.KeyCachingService;
+import org.thoughtcrime.securesms.util.CachedInflater;
 import org.thoughtcrime.securesms.util.CommunicationActions;
 import org.thoughtcrime.securesms.util.DynamicLanguage;
 import org.thoughtcrime.securesms.util.DynamicTheme;
 import org.thoughtcrime.securesms.util.FeatureFlags;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
-import org.thoughtcrime.securesms.util.ThemeUtil;
 
 /**
  * The Activity for application preference display and management.
@@ -64,10 +71,13 @@ import org.thoughtcrime.securesms.util.ThemeUtil;
 public class ApplicationPreferencesActivity extends PassphraseRequiredActivity
     implements SharedPreferences.OnSharedPreferenceChangeListener
 {
-  public static final String LAUNCH_TO_BACKUPS_FRAGMENT = "launch.to.backups.fragment";
+  public static final String LAUNCH_TO_BACKUPS_FRAGMENT       = "launch.to.backups.fragment";
+  public static final String LAUNCH_TO_HELP_FRAGMENT          = "launch.to.help.fragment";
+  public static final String LAUNCH_TO_PROXY_FRAGMENT         = "launch.to.proxy.fragment";
+  public static final String LAUNCH_TO_NOTIFICATIONS_FRAGMENT = "launch.to.notifications.fragment";
 
   @SuppressWarnings("unused")
-  private static final String TAG = ApplicationPreferencesActivity.class.getSimpleName();
+  private static final String TAG = Log.tag(ApplicationPreferencesActivity.class);
 
   private static final String PREFERENCE_CATEGORY_PROFILE        = "preference_category_profile";
   private static final String PREFERENCE_CATEGORY_USERNAME       = "preference_category_username";
@@ -81,6 +91,7 @@ public class ApplicationPreferencesActivity extends PassphraseRequiredActivity
   private static final String PREFERENCE_CATEGORY_HELP           = "preference_category_help";
   private static final String PREFERENCE_CATEGORY_ADVANCED       = "preference_category_advanced";
   private static final String PREFERENCE_CATEGORY_DONATE         = "preference_category_donate";
+  private static final String PREFERENCE_CATEGORY_PAYMENTS       = "preference_category_payments";
 
   private static final String WAS_CONFIGURATION_UPDATED          = "was_configuration_updated";
 
@@ -104,6 +115,15 @@ public class ApplicationPreferencesActivity extends PassphraseRequiredActivity
       initFragment(android.R.id.content, new NotificationsPreferenceFragment());
     } else if (getIntent() != null && getIntent().getBooleanExtra(LAUNCH_TO_BACKUPS_FRAGMENT, false)) {
       initFragment(android.R.id.content, new BackupsPreferenceFragment());
+    } else if (getIntent() != null && getIntent().getBooleanExtra(LAUNCH_TO_HELP_FRAGMENT, false)) {
+      Bundle bundle = new Bundle();
+      bundle.putInt(HelpFragment.START_CATEGORY_INDEX, getIntent().getIntExtra(HelpFragment.START_CATEGORY_INDEX, 0));
+
+      initFragment(android.R.id.content, new HelpFragment(), null, bundle);
+    } else if (getIntent() != null && getIntent().getBooleanExtra(LAUNCH_TO_PROXY_FRAGMENT, false)) {
+      initFragment(android.R.id.content, EditProxyFragment.newInstance());
+    } else if (getIntent() != null && getIntent().getBooleanExtra(LAUNCH_TO_NOTIFICATIONS_FRAGMENT, false)) {
+      initFragment(android.R.id.content, new NotificationsPreferenceFragment());
     } else if (icicle == null) {
       initFragment(android.R.id.content, new ApplicationPreferenceFragment());
     } else {
@@ -159,6 +179,7 @@ public class ApplicationPreferencesActivity extends PassphraseRequiredActivity
       DynamicTheme.setDefaultDayNightMode(this);
       recreate();
     } else if (key.equals(TextSecurePreferences.LANGUAGE_PREF)) {
+      CachedInflater.from(this).clear();
       wasConfigurationUpdated = true;
       recreate();
 
@@ -177,6 +198,8 @@ public class ApplicationPreferencesActivity extends PassphraseRequiredActivity
   }
 
   public static class ApplicationPreferenceFragment extends CorrectedPreferenceFragment {
+
+    private final UnreadPaymentsLiveData unreadPaymentsLiveData = new UnreadPaymentsLiveData();
 
     @Override
     public void onCreate(Bundle icicle) {
@@ -207,7 +230,27 @@ public class ApplicationPreferencesActivity extends PassphraseRequiredActivity
       this.findPreference(PREFERENCE_CATEGORY_DONATE)
           .setOnPreferenceClickListener(new CategoryClickListener(PREFERENCE_CATEGORY_DONATE));
 
+      Preference paymentsPreference = this.findPreference(PREFERENCE_CATEGORY_PAYMENTS);
+
+      if (SignalStore.paymentsValues().getPaymentsAvailability().showPaymentsMenu()) {
+        paymentsPreference.setVisible(true);
+        paymentsPreference.setOnPreferenceClickListener(new CategoryClickListener(PREFERENCE_CATEGORY_PAYMENTS));
+      } else {
+        paymentsPreference.setVisible(false);
+      }
+
       tintIcons();
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+      super.onViewCreated(view, savedInstanceState);
+
+      if (SignalStore.paymentsValues().getPaymentsAvailability().showPaymentsMenu()) {
+        PaymentsPreference paymentsPreference = (PaymentsPreference) this.findPreference(PREFERENCE_CATEGORY_PAYMENTS);
+
+        unreadPaymentsLiveData.observe(getViewLifecycleOwner(), unreadPayments -> paymentsPreference.setUnreadCount(unreadPayments.transform(UnreadPayments::getUnreadCount).or(-1)));
+      }
     }
 
     private void tintIcons() {
@@ -308,7 +351,7 @@ public class ApplicationPreferencesActivity extends PassphraseRequiredActivity
           fragment = new ChatsPreferenceFragment();
           break;
         case PREFERENCE_CATEGORY_STORAGE:
-          fragment = new StoragePreferenceFragment();
+          fragment = new DataAndStoragePreferenceFragment();
           break;
         case PREFERENCE_CATEGORY_DEVICES:
           Intent intent = new Intent(getActivity(), DeviceActivity.class);
@@ -322,6 +365,9 @@ public class ApplicationPreferencesActivity extends PassphraseRequiredActivity
           break;
         case PREFERENCE_CATEGORY_DONATE:
           CommunicationActions.openBrowserLink(requireContext(), getString(R.string.donate_url));
+          break;
+        case PREFERENCE_CATEGORY_PAYMENTS:
+          startActivity(new Intent(requireContext(), PaymentsActivity.class));
           break;
         default:
           throw new AssertionError();
@@ -341,7 +387,7 @@ public class ApplicationPreferencesActivity extends PassphraseRequiredActivity
     private class ProfileClickListener implements Preference.OnPreferenceClickListener {
       @Override
       public boolean onPreferenceClick(Preference preference) {
-        requireActivity().startActivity(EditProfileActivity.getIntentForUserProfileEdit(preference.getContext()));
+        requireActivity().startActivity(ManageProfileActivity.getIntent(requireActivity()));
         return true;
       }
     }
@@ -349,7 +395,7 @@ public class ApplicationPreferencesActivity extends PassphraseRequiredActivity
     private class UsernameClickListener implements Preference.OnPreferenceClickListener {
       @Override
       public boolean onPreferenceClick(Preference preference) {
-        requireActivity().startActivity(EditProfileActivity.getIntentForUsernameEdit(preference.getContext()));
+        requireActivity().startActivity(ManageProfileActivity.getIntentForUsernameEdit(preference.getContext()));
         return true;
       }
     }

@@ -6,23 +6,22 @@ import android.database.Cursor;
 
 import androidx.annotation.NonNull;
 
-import net.sqlcipher.database.SQLiteDatabase;
-
 import org.thoughtcrime.securesms.database.helpers.SQLCipherOpenHelper;
-import org.thoughtcrime.securesms.logging.Log;
-import org.thoughtcrime.securesms.tracing.Trace;
+
+import org.signal.core.util.logging.Log;
+import org.thoughtcrime.securesms.database.helpers.SQLCipherOpenHelper;
 import org.thoughtcrime.securesms.util.Base64;
 import org.whispersystems.libsignal.util.guava.Optional;
 import org.whispersystems.signalservice.api.messages.SignalServiceEnvelope;
 import org.whispersystems.signalservice.api.push.SignalServiceAddress;
 import org.whispersystems.signalservice.internal.util.Util;
 
+import java.io.Closeable;
 import java.io.IOException;
 
-@Trace
 public class PushDatabase extends Database {
 
-  private static final String TAG = PushDatabase.class.getSimpleName();
+  private static final String TAG = Log.tag(PushDatabase.class);
 
   private static final String TABLE_NAME                 = "push";
   public  static final String ID                         = "_id";
@@ -151,7 +150,7 @@ public class PushDatabase extends Database {
     }
   }
 
-  public static class Reader {
+  public static class Reader implements Closeable {
     private final Cursor cursor;
 
     public Reader(Cursor cursor) {
@@ -188,6 +187,7 @@ public class PushDatabase extends Database {
       }
     }
 
+    @Override
     public void close() {
       this.cursor.close();
     }

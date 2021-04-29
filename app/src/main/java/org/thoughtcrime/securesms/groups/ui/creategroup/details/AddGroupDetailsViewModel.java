@@ -63,8 +63,9 @@ public final class AddGroupDetailsViewModel extends ViewModel {
     });
 
     nonGv2CapableMembers = LiveDataUtil.mapAsync(membersToCheckGv2CapabilityOf, memberList -> repository.checkCapabilities(Stream.of(memberList).map(newGroupCandidate -> newGroupCandidate.getMember().getId()).toList()));
-    canSubmitForm        = FeatureFlags.groupsV1ForcedMigration() ? LiveDataUtil.just(false)
-                                                                  : LiveDataUtil.combineLatest(isMms, isValidName, (mms, validName) -> mms || validName);
+    canSubmitForm        = LiveDataUtil.combineLatest(LiveDataUtil.combineLatest(isMms, isValidName, (mms, validName) -> mms || validName),
+                                                      nonGv2CapableMembers,
+                                                      (canSubmit, nonGv2) -> canSubmit && !(FeatureFlags.groupsV1ForcedMigration() && nonGv2.size() > 0));
 
     repository.resolveMembers(recipientIds, initialMembers::postValue);
   }
@@ -117,23 +118,18 @@ public final class AddGroupDetailsViewModel extends ViewModel {
     Set<RecipientId>                         memberIds   = Stream.of(members).map(member -> member.getMember().getId()).collect(Collectors.toSet());
     byte[]                                   avatarBytes = avatar.getValue();
     boolean                                  isGroupMms  = isMms.getValue() == Boolean.TRUE;
-    String                                   groupName   = isGroupMms ? "" : name.getValue();
+    String                                   groupName   = name.getValue();
 
     if (!isGroupMms && TextUtils.isEmpty(groupName)) {
       groupCreateResult.postValue(GroupCreateResult.error(GroupCreateResult.Error.Type.ERROR_INVALID_NAME));
       return;
     }
 
-    if (memberIds.isEmpty()) {
-      groupCreateResult.postValue(GroupCreateResult.error(GroupCreateResult.Error.Type.ERROR_INVALID_MEMBER_COUNT));
-      return;
-    }
-
-    repository.createPushGroup(memberIds,
-                               avatarBytes,
-                               groupName,
-                               isGroupMms,
-                               groupCreateResult::postValue);
+    repository.createGroup(memberIds,
+                           avatarBytes,
+                           groupName,
+                           isGroupMms,
+                           groupCreateResult::postValue);
   }
 
   private static @NonNull List<GroupMemberEntry.NewGroupCandidate> filterDeletedMembers(@NonNull List<GroupMemberEntry.NewGroupCandidate> members, @NonNull Set<RecipientId> deleted) {

@@ -32,10 +32,10 @@ public final class RegistrationCompleteFragment extends BaseRegistrationFragment
 
     FragmentActivity activity = requireActivity();
 
-    if (SignalStore.storageServiceValues().needsAccountRestore()) {
+    if (SignalStore.storageService().needsAccountRestore()) {
       activity.startActivity(new Intent(activity, PinRestoreActivity.class));
     } else if (!isReregister()) {
-      final Intent main    = new Intent(activity, MainActivity.class);
+      final Intent main    = MainActivity.clearTop(activity);
       final Intent profile = EditProfileActivity.getIntentForUserProfile(activity);
 
       Intent kbs = CreateKbsPinActivity.getIntentForPinCreate(requireContext());

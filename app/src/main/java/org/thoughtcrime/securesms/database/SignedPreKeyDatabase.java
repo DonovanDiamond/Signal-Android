@@ -4,14 +4,12 @@ package org.thoughtcrime.securesms.database;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import net.sqlcipher.database.SQLiteDatabase;
-
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.database.helpers.SQLCipherOpenHelper;
-import org.thoughtcrime.securesms.logging.Log;
-import org.thoughtcrime.securesms.tracing.Trace;
 import org.thoughtcrime.securesms.util.Base64;
 import org.whispersystems.libsignal.InvalidKeyException;
 import org.whispersystems.libsignal.ecc.Curve;
@@ -24,10 +22,9 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 
-@Trace
 public class SignedPreKeyDatabase extends Database {
 
-  private static final String TAG = SignedPreKeyDatabase.class.getSimpleName();
+  private static final String TAG = Log.tag(SignedPreKeyDatabase.class);
 
   public static final String TABLE_NAME = "signed_prekeys";
 

@@ -22,25 +22,26 @@ import android.content.Intent;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
 import android.os.Bundle;
+import android.telephony.SmsManager;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import android.telephony.SmsManager;
-import org.thoughtcrime.securesms.logging.Log;
 
 import com.android.mms.service_alt.MmsConfig;
 import com.google.android.mms.pdu_alt.PduParser;
 import com.google.android.mms.pdu_alt.SendConf;
 
+import org.signal.core.util.StreamUtil;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.providers.MmsBodyProvider;
 import org.thoughtcrime.securesms.transport.UndeliverableMessageException;
-import org.thoughtcrime.securesms.util.Util;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
 public class OutgoingLollipopMmsConnection extends LollipopMmsConnection implements OutgoingMmsConnection {
-  private static final String TAG    = OutgoingLollipopMmsConnection.class.getSimpleName();
+  private static final String TAG    = Log.tag(OutgoingLollipopMmsConnection.class);
   private static final String ACTION = OutgoingLollipopMmsConnection.class.getCanonicalName() + "MMS_SENT_ACTION";
 
   private byte[] response;
@@ -67,7 +68,7 @@ public class OutgoingLollipopMmsConnection extends LollipopMmsConnection impleme
     beginTransaction();
     try {
       MmsBodyProvider.Pointer pointer = MmsBodyProvider.makeTemporaryPointer(getContext());
-      Util.copy(new ByteArrayInputStream(pduBytes), pointer.getOutputStream());
+      StreamUtil.copy(new ByteArrayInputStream(pduBytes), pointer.getOutputStream());
 
       SmsManager smsManager;
 

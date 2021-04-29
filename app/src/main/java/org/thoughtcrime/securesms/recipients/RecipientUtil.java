@@ -8,6 +8,7 @@ import androidx.annotation.WorkerThread;
 
 import com.annimon.stream.Stream;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.contacts.sync.DirectoryHelper;
 import org.thoughtcrime.securesms.database.DatabaseFactory;
 import org.thoughtcrime.securesms.database.RecipientDatabase.RegisteredState;
@@ -21,7 +22,6 @@ import org.thoughtcrime.securesms.jobs.MultiDeviceBlockedUpdateJob;
 import org.thoughtcrime.securesms.jobs.MultiDeviceMessageRequestResponseJob;
 import org.thoughtcrime.securesms.jobs.RotateProfileKeyJob;
 import org.thoughtcrime.securesms.keyvalue.SignalStore;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.storage.StorageSyncHelper;
 import org.whispersystems.libsignal.util.guava.Optional;
 import org.whispersystems.signalservice.api.push.SignalServiceAddress;
@@ -93,7 +93,7 @@ public class RecipientUtil {
                  .toList();
   }
 
-  public static void ensureUuidsAreAvailable(@NonNull Context context, @NonNull Collection<Recipient> recipients)
+  public static boolean ensureUuidsAreAvailable(@NonNull Context context, @NonNull Collection<Recipient> recipients)
       throws IOException
   {
     List<Recipient> recipientsWithoutUuids = Stream.of(recipients)
@@ -103,12 +103,15 @@ public class RecipientUtil {
 
     if (recipientsWithoutUuids.size() > 0) {
       DirectoryHelper.refreshDirectoryFor(context, recipientsWithoutUuids, false);
+      return true;
+    } else {
+      return false;
     }
   }
 
   public static boolean isBlockable(@NonNull Recipient recipient) {
     Recipient resolved = recipient.resolve();
-    return resolved.isPushGroup() || resolved.hasServiceIdentifier();
+    return !resolved.isMmsGroup();
   }
 
   public static List<Recipient> getEligibleForSending(@NonNull List<Recipient> recipients) {
@@ -174,7 +177,10 @@ public class RecipientUtil {
     DatabaseFactory.getRecipientDatabase(context).setProfileSharing(recipient.getId(), true);
     ApplicationDependencies.getJobManager().add(new MultiDeviceBlockedUpdateJob());
     StorageSyncHelper.scheduleSyncForDataChange();
-    ApplicationDependencies.getJobManager().add(MultiDeviceMessageRequestResponseJob.forAccept(recipient.getId()));
+
+    if (recipient.hasServiceIdentifier()) {
+      ApplicationDependencies.getJobManager().add(MultiDeviceMessageRequestResponseJob.forAccept(recipient.getId()));
+    }
   }
 
   /**

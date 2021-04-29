@@ -17,10 +17,12 @@
 package org.thoughtcrime.securesms.database.model;
 
 import android.content.Context;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import android.text.SpannableString;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.contactshare.Contact;
 import org.thoughtcrime.securesms.database.MmsDatabase;
@@ -42,7 +44,7 @@ import java.util.List;
  */
 
 public class MediaMmsMessageRecord extends MmsMessageRecord {
-  private final static String TAG = MediaMmsMessageRecord.class.getSimpleName();
+  private final static String TAG = Log.tag(MediaMmsMessageRecord.class);
 
   private final int     partCount;
   private final boolean mentionsSelf;
@@ -74,12 +76,13 @@ public class MediaMmsMessageRecord extends MmsMessageRecord {
                                @NonNull List<ReactionRecord> reactions,
                                boolean remoteDelete,
                                boolean mentionsSelf,
-                               long notifiedTimestamp)
+                               long notifiedTimestamp,
+                               int viewedReceiptCount)
   {
     super(id, body, conversationRecipient, individualRecipient, recipientDeviceId, dateSent,
           dateReceived, dateServer, threadId, Status.STATUS_NONE, deliveryReceiptCount, mailbox, mismatches, failures,
           subscriptionId, expiresIn, expireStarted, viewOnce, slideDeck,
-          readReceiptCount, quote, contacts, linkPreviews, unidentified, reactions, remoteDelete, notifiedTimestamp);
+          readReceiptCount, quote, contacts, linkPreviews, unidentified, reactions, remoteDelete, notifiedTimestamp, viewedReceiptCount);
     this.partCount    = partCount;
     this.mentionsSelf = mentionsSelf;
   }

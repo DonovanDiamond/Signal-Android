@@ -22,6 +22,8 @@ import com.google.android.mms.pdu_alt.SendReq;
 import com.google.android.mms.smil.SmilHelper;
 import com.klinker.android.send_message.Utils;
 
+import org.signal.core.util.StreamUtil;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.attachments.Attachment;
 import org.thoughtcrime.securesms.attachments.DatabaseAttachment;
 import org.thoughtcrime.securesms.database.DatabaseFactory;
@@ -35,18 +37,17 @@ import org.thoughtcrime.securesms.jobmanager.Job;
 import org.thoughtcrime.securesms.jobmanager.JobLogger;
 import org.thoughtcrime.securesms.jobmanager.JobManager;
 import org.thoughtcrime.securesms.jobmanager.impl.NetworkConstraint;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.mms.CompatMmsConnection;
 import org.thoughtcrime.securesms.mms.MediaConstraints;
 import org.thoughtcrime.securesms.mms.MmsException;
 import org.thoughtcrime.securesms.mms.MmsSendResult;
 import org.thoughtcrime.securesms.mms.OutgoingMediaMessage;
 import org.thoughtcrime.securesms.mms.PartAuthority;
+import org.thoughtcrime.securesms.phonenumbers.NumberUtil;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.transport.InsecureFallbackApprovalException;
 import org.thoughtcrime.securesms.transport.UndeliverableMessageException;
 import org.thoughtcrime.securesms.util.Hex;
-import org.thoughtcrime.securesms.phonenumbers.NumberUtil;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
 import org.thoughtcrime.securesms.util.Util;
 
@@ -60,7 +61,7 @@ public final class MmsSendJob extends SendJob {
 
   public static final String KEY = "MmsSendJobV2";
 
-  private static final String TAG = MmsSendJob.class.getSimpleName();
+  private static final String TAG = Log.tag(MmsSendJob.class);
 
   private static final String KEY_MESSAGE_ID = "message_id";
 
@@ -140,7 +141,7 @@ public final class MmsSendJob extends SendJob {
       final MmsSendResult result   = getSendResult(sendConf, pdu);
 
       database.markAsSent(messageId, false);
-      markAttachmentsUploaded(messageId, message.getAttachments());
+      markAttachmentsUploaded(messageId, message);
 
       Log.i(TAG, "Sent message: " + messageId);
     } catch (UndeliverableMessageException | IOException e) {
@@ -241,6 +242,10 @@ public final class MmsSendJob extends SendJob {
       List<Recipient> members = DatabaseFactory.getGroupDatabase(context).getGroupMembers(message.getRecipient().requireGroupId(), GroupDatabase.MemberSet.FULL_MEMBERS_EXCLUDING_SELF);
 
       for (Recipient member : members) {
+        if (!member.hasSmsAddress()) {
+          throw new UndeliverableMessageException("One of the group recipients did not have an SMS address! " + member.getId());
+        }
+
         if (message.getDistributionType() == ThreadDatabase.DistributionTypes.BROADCAST) {
           req.addBcc(new EncodedStringValue(member.requireSmsAddress()));
         } else {
@@ -248,6 +253,10 @@ public final class MmsSendJob extends SendJob {
         }
       }
     } else {
+      if (!message.getRecipient().hasSmsAddress()) {
+        throw new UndeliverableMessageException("Recipient did not have an SMS address! " + message.getRecipient().getId());
+      }
+
       req.addTo(new EncodedStringValue(message.getRecipient().requireSmsAddress()));
     }
 
@@ -295,7 +304,7 @@ public final class MmsSendJob extends SendJob {
         int index = fileName.lastIndexOf(".");
         String contentId = (index == -1) ? fileName : fileName.substring(0, index);
         part.setContentId(contentId.getBytes());
-        part.setData(Util.readFully(PartAuthority.getAttachmentStream(context, attachment.getUri())));
+        part.setData(StreamUtil.readFully(PartAuthority.getAttachmentStream(context, attachment.getUri())));
 
         body.addPart(part);
         size += getPartSize(part);

@@ -3,14 +3,15 @@ package org.thoughtcrime.securesms.util;
 import android.content.Context;
 import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import org.thoughtcrime.securesms.logging.Log;
+import org.signal.core.util.logging.Log;
 
 public class WakeLockUtil {
 
-  private static final String TAG = WakeLockUtil.class.getSimpleName();
+  private static final String TAG = Log.tag(WakeLockUtil.class);
 
   /**
    * Run a runnable with a wake lock. Ensures that the lock is safely acquired and released.

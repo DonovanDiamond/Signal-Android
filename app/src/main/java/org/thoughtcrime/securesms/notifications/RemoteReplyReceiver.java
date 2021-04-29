@@ -21,13 +21,14 @@ import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.os.AsyncTask;
 import android.os.Bundle;
+
 import androidx.core.app.RemoteInput;
 
+import org.signal.core.util.concurrent.SignalExecutors;
 import org.thoughtcrime.securesms.database.DatabaseFactory;
-import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.database.MessageDatabase.MarkedMessageInfo;
+import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.mms.OutgoingMediaMessage;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.recipients.RecipientId;
@@ -44,10 +45,10 @@ import java.util.List;
  */
 public class RemoteReplyReceiver extends BroadcastReceiver {
 
-  public static final String TAG             = RemoteReplyReceiver.class.getSimpleName();
-  public static final String REPLY_ACTION    = "org.thoughtcrime.securesms.notifications.WEAR_REPLY";
-  public static final String RECIPIENT_EXTRA = "recipient_extra";
-  public static final String REPLY_METHOD    = "reply_method";
+  public static final String REPLY_ACTION       = "org.thoughtcrime.securesms.notifications.WEAR_REPLY";
+  public static final String RECIPIENT_EXTRA    = "recipient_extra";
+  public static final String REPLY_METHOD       = "reply_method";
+  public static final String EARLIEST_TIMESTAMP = "earliest_timestamp";
 
   @SuppressLint("StaticFieldLeak")
   @Override
@@ -66,56 +67,53 @@ public class RemoteReplyReceiver extends BroadcastReceiver {
     if (replyMethod == null) throw new AssertionError("No reply method specified");
 
     if (responseText != null) {
-      new AsyncTask<Void, Void, Void>() {
-        @Override
-        protected Void doInBackground(Void... params) {
-          long threadId;
+      SignalExecutors.BOUNDED.execute(() -> {
+        long threadId;
 
-          Recipient recipient      = Recipient.resolved(recipientId);
-          int       subscriptionId = recipient.getDefaultSubscriptionId().or(-1);
-          long      expiresIn      = recipient.getExpireMessages() * 1000L;
+        Recipient recipient      = Recipient.resolved(recipientId);
+        int       subscriptionId = recipient.getDefaultSubscriptionId().or(-1);
+        long      expiresIn      = recipient.getExpireMessages() * 1000L;
 
-          switch (replyMethod) {
-            case GroupMessage: {
-              OutgoingMediaMessage reply = new OutgoingMediaMessage(recipient,
-                                                                    responseText.toString(),
-                                                                    new LinkedList<>(),
-                                                                    System.currentTimeMillis(),
-                                                                    subscriptionId,
-                                                                    expiresIn,
-                                                                    false,
-                                                                    0,
-                                                                    null,
-                                                                    Collections.emptyList(),
-                                                                    Collections.emptyList(),
-                                                                    Collections.emptyList(),
-                                                                    Collections.emptyList(),
-                                                                    Collections.emptyList());
-              threadId = MessageSender.send(context, reply, -1, false, null);
-              break;
-            }
-            case SecureMessage: {
-              OutgoingEncryptedMessage reply = new OutgoingEncryptedMessage(recipient, responseText.toString(), expiresIn);
-              threadId = MessageSender.send(context, reply, -1, false, null);
-              break;
-            }
-            case UnsecuredSmsMessage: {
-              OutgoingTextMessage reply = new OutgoingTextMessage(recipient, responseText.toString(), expiresIn, subscriptionId);
-              threadId = MessageSender.send(context, reply, -1, true, null);
-              break;
-            }
-            default:
-              throw new AssertionError("Unknown Reply method");
+        switch (replyMethod) {
+          case GroupMessage: {
+            OutgoingMediaMessage reply = new OutgoingMediaMessage(recipient,
+                                                                  responseText.toString(),
+                                                                  new LinkedList<>(),
+                                                                  System.currentTimeMillis(),
+                                                                  subscriptionId,
+                                                                  expiresIn,
+                                                                  false,
+                                                                  0,
+                                                                  null,
+                                                                  Collections.emptyList(),
+                                                                  Collections.emptyList(),
+                                                                  Collections.emptyList(),
+                                                                  Collections.emptyList(),
+                                                                  Collections.emptyList());
+            threadId = MessageSender.send(context, reply, -1, false, null);
+            break;
           }
-
-          List<MarkedMessageInfo> messageIds = DatabaseFactory.getThreadDatabase(context).setRead(threadId, true);
-
-          ApplicationDependencies.getMessageNotifier().updateNotification(context);
-          MarkReadReceiver.process(context, messageIds);
-
-          return null;
+          case SecureMessage: {
+            OutgoingEncryptedMessage reply = new OutgoingEncryptedMessage(recipient, responseText.toString(), expiresIn);
+            threadId = MessageSender.send(context, reply, -1, false, null);
+            break;
+          }
+          case UnsecuredSmsMessage: {
+            OutgoingTextMessage reply = new OutgoingTextMessage(recipient, responseText.toString(), expiresIn, subscriptionId);
+            threadId = MessageSender.send(context, reply, -1, true, null);
+            break;
+          }
+          default:
+            throw new AssertionError("Unknown Reply method");
         }
-      }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+
+        ApplicationDependencies.getMessageNotifier().addStickyThread(threadId, intent.getLongExtra(EARLIEST_TIMESTAMP, System.currentTimeMillis()));
+
+        List<MarkedMessageInfo> messageIds = DatabaseFactory.getThreadDatabase(context).setRead(threadId, true);
+
+        ApplicationDependencies.getMessageNotifier().updateNotification(context);
+        MarkReadReceiver.process(context, messageIds);
+      });
     }
   }
 }

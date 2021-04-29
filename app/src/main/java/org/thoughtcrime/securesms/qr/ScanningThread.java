@@ -1,9 +1,9 @@
 package org.thoughtcrime.securesms.qr;
 
 import android.content.res.Configuration;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import org.thoughtcrime.securesms.logging.Log;
 
 import com.google.zxing.BinaryBitmap;
 import com.google.zxing.ChecksumException;
@@ -15,6 +15,7 @@ import com.google.zxing.Result;
 import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.qrcode.QRCodeReader;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.components.camera.CameraView;
 import org.thoughtcrime.securesms.components.camera.CameraView.PreviewFrame;
 import org.thoughtcrime.securesms.util.Util;
@@ -25,7 +26,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class ScanningThread extends Thread implements CameraView.PreviewCallback {
 
-  private static final String TAG = ScanningThread.class.getSimpleName();
+  private static final String TAG = Log.tag(ScanningThread.class);
 
   private final QRCodeReader                  reader       = new QRCodeReader();
   private final AtomicReference<ScanListener> scanListener = new AtomicReference<>();

@@ -6,7 +6,7 @@ import android.text.TextUtils;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import org.thoughtcrime.securesms.logging.Log;
+import org.signal.core.util.logging.Log;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -19,7 +19,7 @@ public final class VCardUtil {
 
     private VCardUtil(){}
 
-    private static final String TAG = VCardUtil.class.getSimpleName();
+    private static final String TAG = Log.tag(VCardUtil.class);
 
     public static List<Contact> parseContacts(@NonNull String vCardData) {
         List<VCard> vContacts = Ezvcard.parse(vCardData).all();

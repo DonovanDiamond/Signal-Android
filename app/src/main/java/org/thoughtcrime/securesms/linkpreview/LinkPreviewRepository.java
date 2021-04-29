@@ -11,6 +11,8 @@ import androidx.core.util.Consumer;
 
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
 
+import org.signal.core.util.concurrent.SignalExecutors;
+import org.signal.core.util.logging.Log;
 import org.signal.storageservice.protos.groups.local.DecryptedGroupJoinInfo;
 import org.signal.zkgroup.VerificationFailedException;
 import org.signal.zkgroup.groups.GroupMasterKey;
@@ -27,7 +29,6 @@ import org.thoughtcrime.securesms.groups.v2.GroupInviteLinkUrl;
 import org.thoughtcrime.securesms.jobs.AvatarGroupsV2DownloadJob;
 import org.thoughtcrime.securesms.keyvalue.SignalStore;
 import org.thoughtcrime.securesms.linkpreview.LinkPreviewUtil.OpenGraph;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.mms.GlideApp;
 import org.thoughtcrime.securesms.net.CallRequestController;
 import org.thoughtcrime.securesms.net.CompositeRequestController;
@@ -43,7 +44,6 @@ import org.thoughtcrime.securesms.util.ByteUnit;
 import org.thoughtcrime.securesms.util.Hex;
 import org.thoughtcrime.securesms.util.MediaUtil;
 import org.thoughtcrime.securesms.util.OkHttpUtil;
-import org.thoughtcrime.securesms.util.concurrent.SignalExecutors;
 import org.whispersystems.libsignal.InvalidMessageException;
 import org.whispersystems.libsignal.util.Pair;
 import org.whispersystems.libsignal.util.guava.Optional;
@@ -65,7 +65,7 @@ import okhttp3.Response;
 
 public class LinkPreviewRepository {
 
-  private static final String TAG = LinkPreviewRepository.class.getSimpleName();
+  private static final String TAG = Log.tag(LinkPreviewRepository.class);
 
   private static final CacheControl NO_CACHE = new CacheControl.Builder().noCache().build();
 
@@ -77,7 +77,7 @@ public class LinkPreviewRepository {
   public LinkPreviewRepository() {
     this.client = new OkHttpClient.Builder()
                                   .cache(null)
-                                  .addInterceptor(new UserAgentInterceptor("WhatsApp"))
+                                  .addInterceptor(new UserAgentInterceptor("WhatsApp/2"))
                                   .build();
   }
 
@@ -342,6 +342,7 @@ public class LinkPreviewRepository {
                                          bitmap.getHeight(),
                                          null,
                                          null,
+                                         false,
                                          false,
                                          false,
                                          false,

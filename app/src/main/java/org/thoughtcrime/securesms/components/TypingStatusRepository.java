@@ -1,15 +1,17 @@
 package org.thoughtcrime.securesms.components;
 
 import android.annotation.SuppressLint;
+import android.content.Context;
+
+import androidx.annotation.NonNull;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
-import android.content.Context;
-import androidx.annotation.NonNull;
 
 import com.annimon.stream.Collectors;
 import com.annimon.stream.Stream;
 
-import org.thoughtcrime.securesms.logging.Log;
+import org.signal.core.util.ThreadUtil;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.util.Util;
 
@@ -25,7 +27,7 @@ import java.util.concurrent.TimeUnit;
 @SuppressLint("UseSparseArrays")
 public class TypingStatusRepository {
 
-  private static final String TAG = TypingStatusRepository.class.getSimpleName();
+  private static final String TAG = Log.tag(TypingStatusRepository.class);
 
   private static final long RECIPIENT_TYPING_TIMEOUT = TimeUnit.SECONDS.toMillis(15);
 
@@ -57,11 +59,11 @@ public class TypingStatusRepository {
 
     Runnable timer = timers.get(typist);
     if (timer != null) {
-      Util.cancelRunnableOnMain(timer);
+      ThreadUtil.cancelRunnableOnMain(timer);
     }
 
     timer = () -> onTypingStopped(context, threadId, author, device, false);
-    Util.runOnMainDelayed(timer, RECIPIENT_TYPING_TIMEOUT);
+    ThreadUtil.runOnMainDelayed(timer, RECIPIENT_TYPING_TIMEOUT);
     timers.put(typist, timer);
   }
 
@@ -84,7 +86,7 @@ public class TypingStatusRepository {
 
     Runnable timer = timers.get(typist);
     if (timer != null) {
-      Util.cancelRunnableOnMain(timer);
+      ThreadUtil.cancelRunnableOnMain(timer);
       timers.remove(typist);
     }
   }

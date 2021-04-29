@@ -1,14 +1,18 @@
 package org.thoughtcrime.securesms.service.webrtc;
 
-import androidx.annotation.NonNull;
+import android.os.ResultReceiver;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import org.signal.core.util.logging.Log;
 import org.signal.ringrtc.CallException;
 import org.signal.ringrtc.GroupCall;
 import org.thoughtcrime.securesms.events.WebRtcViewModel;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.ringrtc.Camera;
 import org.thoughtcrime.securesms.service.webrtc.state.WebRtcServiceState;
 import org.thoughtcrime.securesms.service.webrtc.state.WebRtcServiceStateBuilder;
+import org.thoughtcrime.securesms.util.NetworkUtil;
 import org.thoughtcrime.securesms.webrtc.locks.LockManager;
 
 import static org.thoughtcrime.securesms.webrtc.CallNotificationBuilder.TYPE_ESTABLISHED;
@@ -25,6 +29,14 @@ public class GroupJoiningActionProcessor extends GroupActionProcessor {
   public GroupJoiningActionProcessor(@NonNull WebRtcInteractor webRtcInteractor) {
     super(webRtcInteractor, TAG);
     callSetupDelegate = new CallSetupActionProcessorDelegate(webRtcInteractor, TAG);
+  }
+
+  @Override
+  protected @NonNull WebRtcServiceState handleIsInCallQuery(@NonNull WebRtcServiceState currentState, @Nullable ResultReceiver resultReceiver) {
+    if (resultReceiver != null) {
+      resultReceiver.send(1, null);
+    }
+    return currentState;
   }
 
   @Override
@@ -50,7 +62,6 @@ public class GroupJoiningActionProcessor extends GroupActionProcessor {
         if (device.getJoinState() == GroupCall.JoinState.JOINED) {
 
           webRtcInteractor.startAudioCommunication(true);
-          webRtcInteractor.setWantsBluetoothConnection(true);
 
           if (currentState.getLocalDeviceState().getCameraState().isEnabled()) {
             webRtcInteractor.updatePhoneState(LockManager.PhoneState.IN_VIDEO);
@@ -59,10 +70,12 @@ public class GroupJoiningActionProcessor extends GroupActionProcessor {
           }
 
           webRtcInteractor.setCallInProgressNotification(TYPE_ESTABLISHED, currentState.getCallInfoState().getCallRecipient());
+          webRtcInteractor.setWantsBluetoothConnection(true);
 
           try {
             groupCall.setOutgoingVideoMuted(!currentState.getLocalDeviceState().getCameraState().isEnabled());
             groupCall.setOutgoingAudioMuted(!currentState.getLocalDeviceState().isMicrophoneEnabled());
+            groupCall.setBandwidthMode(NetworkUtil.getCallingBandwidthMode(context));
           } catch (CallException e) {
             Log.e(tag, e);
             throw new RuntimeException(e);
@@ -72,6 +85,9 @@ public class GroupJoiningActionProcessor extends GroupActionProcessor {
                  .callState(WebRtcViewModel.State.CALL_CONNECTED)
                  .groupCallState(WebRtcViewModel.GroupCallState.CONNECTED_AND_JOINED)
                  .callConnectedTime(System.currentTimeMillis())
+                 .commit()
+                 .changeLocalDeviceState()
+                 .wantsBluetooth(true)
                  .commit()
                  .actionProcessor(new GroupConnectedActionProcessor(webRtcInteractor))
                  .build();
@@ -106,7 +122,7 @@ public class GroupJoiningActionProcessor extends GroupActionProcessor {
                                .groupCallState(WebRtcViewModel.GroupCallState.DISCONNECTED)
                                .build();
 
-    webRtcInteractor.sendMessage(currentState);
+    webRtcInteractor.postStateUpdate(currentState);
 
     return terminateGroupCall(currentState);
   }
@@ -128,7 +144,7 @@ public class GroupJoiningActionProcessor extends GroupActionProcessor {
                                .cameraState(camera.getCameraState())
                                .build();
 
-    WebRtcUtil.enableSpeakerPhoneIfNeeded(webRtcInteractor.getWebRtcCallService(), currentState.getCallSetupState().isEnableVideoOnCreate());
+    WebRtcUtil.enableSpeakerPhoneIfNeeded(context, currentState.getCallSetupState().isEnableVideoOnCreate());
 
     return currentState;
   }

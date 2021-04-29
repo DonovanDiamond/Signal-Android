@@ -35,9 +35,9 @@ import com.bumptech.glide.load.resource.bitmap.CenterCrop;
 import com.bumptech.glide.request.target.SimpleTarget;
 import com.bumptech.glide.request.transition.Transition;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.LoggingFragment;
 import org.thoughtcrime.securesms.R;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.mms.DecryptableStreamUriLoader.DecryptableUri;
 import org.thoughtcrime.securesms.mms.GlideApp;
 import org.thoughtcrime.securesms.util.ServiceUtil;
@@ -55,7 +55,7 @@ public class Camera1Fragment extends LoggingFragment implements CameraFragment,
                                                              Camera1Controller.EventListener
 {
 
-  private static final String TAG = Camera1Fragment.class.getSimpleName();
+  private static final String TAG = Log.tag(Camera1Fragment.class);
 
   private TextureView                  cameraPreview;
   private ViewGroup                    controlsContainer;
@@ -111,8 +111,8 @@ public class Camera1Fragment extends LoggingFragment implements CameraFragment,
     GestureDetector gestureDetector = new GestureDetector(flipGestureListener);
     cameraPreview.setOnTouchListener((v, event) -> gestureDetector.onTouchEvent(event));
 
-    viewModel.getMostRecentMediaItem().observe(this, this::presentRecentItemThumbnail);
-    viewModel.getHudState().observe(this, this::presentHud);
+    viewModel.getMostRecentMediaItem().observe(getViewLifecycleOwner(), this::presentRecentItemThumbnail);
+    viewModel.getHudState().observe(getViewLifecycleOwner(), this::presentHud);
   }
 
   @Override

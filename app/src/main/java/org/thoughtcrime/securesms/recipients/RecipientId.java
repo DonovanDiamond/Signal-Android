@@ -12,14 +12,13 @@ import androidx.annotation.Nullable;
 import com.annimon.stream.Stream;
 
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.util.DelimiterUtil;
 import org.thoughtcrime.securesms.util.Util;
 import org.whispersystems.signalservice.api.push.SignalServiceAddress;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -46,6 +45,10 @@ public class RecipientId implements Parcelable, Comparable<RecipientId> {
     } catch (NumberFormatException e) {
       throw new InvalidStringRecipientIdError();
     }
+  }
+
+  public static @Nullable RecipientId fromNullable(@Nullable String id) {
+    return id != null ? from(id) : null;
   }
 
   @AnyThread
@@ -96,7 +99,7 @@ public class RecipientId implements Parcelable, Comparable<RecipientId> {
     id = in.readLong();
   }
 
-  public static @NonNull String toSerializedList(@NonNull List<RecipientId> ids) {
+  public static @NonNull String toSerializedList(@NonNull Collection<RecipientId> ids) {
     return Util.join(Stream.of(ids).map(RecipientId::serialize).toList(), String.valueOf(DELIMITER));
   }
 

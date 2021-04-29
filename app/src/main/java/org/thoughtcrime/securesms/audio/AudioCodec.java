@@ -8,8 +8,9 @@ import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
 import android.media.MediaRecorder;
 import android.os.Build;
-import org.thoughtcrime.securesms.logging.Log;
 
+import org.signal.core.util.StreamUtil;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.util.Util;
 
 import java.io.IOException;
@@ -19,7 +20,7 @@ import java.nio.ByteBuffer;
 @TargetApi(Build.VERSION_CODES.JELLY_BEAN)
 public class AudioCodec {
 
-  private static final String TAG = AudioCodec.class.getSimpleName();
+  private static final String TAG = Log.tag(AudioCodec.class);
 
   private static final int    SAMPLE_RATE       = 44100;
   private static final int    SAMPLE_RATE_INDEX = 4;
@@ -81,7 +82,7 @@ public class AudioCodec {
           mediaCodec.release();
           audioRecord.release();
 
-          Util.close(outputStream);
+          StreamUtil.close(outputStream);
           setFinished();
         }
       }

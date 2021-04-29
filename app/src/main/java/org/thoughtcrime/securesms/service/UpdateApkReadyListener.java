@@ -12,8 +12,8 @@ import android.net.Uri;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
-import org.thoughtcrime.securesms.logging.Log;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.notifications.NotificationChannels;
 import org.thoughtcrime.securesms.util.FileProviderUtil;
@@ -29,7 +29,7 @@ import java.security.MessageDigest;
 
 public class UpdateApkReadyListener extends BroadcastReceiver {
 
-  private static final String TAG = UpdateApkReadyListener.class.getSimpleName();
+  private static final String TAG = Log.tag(UpdateApkReadyListener.class);
 
   @Override
   public void onReceive(Context context, Intent intent) {

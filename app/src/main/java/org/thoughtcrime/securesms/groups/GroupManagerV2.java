@@ -11,6 +11,7 @@ import com.annimon.stream.Stream;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 
+import org.signal.core.util.logging.Log;
 import org.signal.storageservice.protos.groups.AccessControl;
 import org.signal.storageservice.protos.groups.GroupChange;
 import org.signal.storageservice.protos.groups.GroupExternalCredential;
@@ -36,17 +37,19 @@ import org.thoughtcrime.securesms.database.ThreadDatabase;
 import org.thoughtcrime.securesms.database.model.databaseprotos.DecryptedGroupV2Context;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.groups.v2.GroupCandidateHelper;
+import org.thoughtcrime.securesms.groups.v2.GroupInviteLinkUrl;
 import org.thoughtcrime.securesms.groups.v2.GroupLinkPassword;
 import org.thoughtcrime.securesms.groups.v2.processing.GroupsV2StateProcessor;
+import org.thoughtcrime.securesms.jobs.ProfileUploadJob;
 import org.thoughtcrime.securesms.jobs.PushGroupSilentUpdateSendJob;
 import org.thoughtcrime.securesms.jobs.RequestGroupV2InfoJob;
 import org.thoughtcrime.securesms.keyvalue.SignalStore;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.mms.OutgoingGroupUpdateMessage;
 import org.thoughtcrime.securesms.profiles.AvatarHelper;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.recipients.RecipientId;
 import org.thoughtcrime.securesms.sms.MessageSender;
+import org.thoughtcrime.securesms.util.Util;
 import org.whispersystems.libsignal.util.guava.Optional;
 import org.whispersystems.signalservice.api.groupsv2.DecryptedGroupUtil;
 import org.whispersystems.signalservice.api.groupsv2.GroupCandidate;
@@ -73,6 +76,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -128,10 +132,11 @@ final class GroupManagerV2 {
 
   @WorkerThread
   @NonNull Map<UUID, UuidCiphertext> getUuidCipherTexts(@NonNull GroupId.V2 groupId) {
-    GroupDatabase.GroupRecord groupRecord         = DatabaseFactory.getGroupDatabase(context).requireGroup(groupId);
-    GroupMasterKey            groupMasterKey      = groupRecord.requireV2GroupProperties().getGroupMasterKey();
-    ClientZkGroupCipher       clientZkGroupCipher = new ClientZkGroupCipher(GroupSecretParams.deriveFromMasterKey(groupMasterKey));
-    List<Recipient>           recipients          = Recipient.resolvedList(groupRecord.getMembers());
+    GroupDatabase.GroupRecord       groupRecord         = DatabaseFactory.getGroupDatabase(context).requireGroup(groupId);
+    GroupDatabase.V2GroupProperties v2GroupProperties   = groupRecord.requireV2GroupProperties();
+    GroupMasterKey                  groupMasterKey      = v2GroupProperties.getGroupMasterKey();
+    ClientZkGroupCipher             clientZkGroupCipher = new ClientZkGroupCipher(GroupSecretParams.deriveFromMasterKey(groupMasterKey));
+    List<Recipient>                 recipients          = v2GroupProperties.getMemberRecipients(GroupDatabase.MemberSet.FULL_MEMBERS_INCLUDING_SELF);
 
     Map<UUID, UuidCiphertext> uuidCipherTexts = new HashMap<>();
     for (Recipient recipient : recipients) {
@@ -213,7 +218,7 @@ final class GroupManagerV2 {
       GroupMasterKey            groupMasterKey    = groupIdV1.deriveV2MigrationMasterKey();
       GroupSecretParams         groupSecretParams = GroupSecretParams.deriveFromMasterKey(groupMasterKey);
       GroupDatabase.GroupRecord groupRecord       = groupDatabase.requireGroup(groupIdV1);
-      String                    name              = groupRecord.getTitle();
+      String                    name              = Util.emptyIfNull(groupRecord.getTitle());
       byte[]                    avatar            = groupRecord.hasAvatar() ? AvatarHelper.getAvatarBytes(context, groupRecord.getRecipientId()) : null;
       int                       messageTimer      = Recipient.resolved(groupRecord.getRecipientId()).getExpireMessages();
       Set<RecipientId>          memberIds         = Stream.of(members)
@@ -461,12 +466,15 @@ final class GroupManagerV2 {
       if (Arrays.equals(profileKey.serialize(), selfInGroup.get().getProfileKey().toByteArray())) {
         Log.i(TAG, "Own Profile Key is already up to date in group " + groupId);
         return null;
+      } else {
+        Log.i(TAG, "Profile Key does not match that in group " + groupId);
       }
 
       GroupCandidate groupCandidate = groupCandidateHelper.recipientIdToCandidate(Recipient.self().getId());
 
       if (!groupCandidate.hasProfileKeyCredential()) {
-        Log.w(TAG, "No credential available");
+        Log.w(TAG, "No credential available, repairing");
+        ApplicationDependencies.getJobManager().add(new ProfileUploadJob());
         return null;
       }
 
@@ -503,7 +511,7 @@ final class GroupManagerV2 {
     }
 
     @WorkerThread
-    public GroupManager.GroupActionResult setJoinByGroupLinkState(@NonNull GroupManager.GroupLinkState state)
+    public @Nullable GroupInviteLinkUrl setJoinByGroupLinkState(@NonNull GroupManager.GroupLinkState state)
         throws GroupChangeFailedException, GroupNotAMemberException, GroupInsufficientRightsException, IOException
     {
       AccessControl.AccessRequired access;
@@ -515,7 +523,7 @@ final class GroupManagerV2 {
         default:                    throw new AssertionError();
       }
 
-      GroupChange.Actions.Builder  change = groupOperations.createChangeJoinByLinkRights(access);
+      GroupChange.Actions.Builder change = groupOperations.createChangeJoinByLinkRights(access);
 
       if (state != GroupManager.GroupLinkState.DISABLED) {
         DecryptedGroup group = groupDatabase.requireGroup(groupId).requireV2GroupProperties().getDecryptedGroup();
@@ -526,7 +534,17 @@ final class GroupManagerV2 {
         }
       }
 
-      return commitChangeWithConflictResolution(change);
+      commitChangeWithConflictResolution(change);
+
+      if (state != GroupManager.GroupLinkState.DISABLED) {
+        GroupDatabase.V2GroupProperties v2GroupProperties = groupDatabase.requireGroup(groupId).requireV2GroupProperties();
+        GroupMasterKey                  groupMasterKey    = v2GroupProperties.getGroupMasterKey();
+        DecryptedGroup                  decryptedGroup    = v2GroupProperties.getDecryptedGroup();
+
+        return GroupInviteLinkUrl.forGroup(groupMasterKey, decryptedGroup);
+      } else {
+        return null;
+      }
     }
 
     private @NonNull GroupManager.GroupActionResult commitChangeWithConflictResolution(@NonNull GroupChange.Actions.Builder change)
@@ -563,7 +581,16 @@ final class GroupManagerV2 {
       GroupsV2StateProcessor.GroupUpdateResult groupUpdateResult = groupsV2StateProcessor.forGroup(groupMasterKey)
                                                                                          .updateLocalGroupToRevision(GroupsV2StateProcessor.LATEST, System.currentTimeMillis(), null);
 
-      if (groupUpdateResult.getGroupState() != GroupsV2StateProcessor.GroupState.GROUP_UPDATED || groupUpdateResult.getLatestServer() == null) {
+      if (groupUpdateResult.getLatestServer() == null) {
+        Log.w(TAG, "Latest server state null.");
+        throw new GroupChangeFailedException();
+      }
+
+      if (groupUpdateResult.getGroupState() != GroupsV2StateProcessor.GroupState.GROUP_UPDATED) {
+        int serverRevision = groupUpdateResult.getLatestServer().getRevision();
+        int localRevision  = groupDatabase.requireGroup(groupId).requireV2GroupProperties().getGroupRevision();
+        int revisionDelta  = serverRevision - localRevision;
+        Log.w(TAG, String.format(Locale.US, "Server is ahead by %d revisions", revisionDelta));
         throw new GroupChangeFailedException();
       }
 
@@ -763,9 +790,17 @@ final class GroupManagerV2 {
         alreadyAMember = true;
       }
 
+      Optional<GroupDatabase.GroupRecord> unmigratedV1Group = groupDatabase.getGroupV1ByExpectedV2(groupId);
+
+      if (unmigratedV1Group.isPresent()) {
+        Log.i(TAG, "Group link was for a migrated V1 group we know about! Migrating it and using that as the base.");
+        GroupsV1MigrationUtil.performLocalMigration(context, unmigratedV1Group.get().getId().requireV1());
+      }
+
       DecryptedGroup decryptedGroup = createPlaceholderGroup(joinInfo, requestToJoin);
 
       Optional<GroupDatabase.GroupRecord> group = groupDatabase.getGroup(groupId);
+
       if (group.isPresent()) {
         Log.i(TAG, "Group already present locally");
 

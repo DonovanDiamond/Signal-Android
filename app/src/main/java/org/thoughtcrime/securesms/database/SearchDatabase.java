@@ -8,15 +8,12 @@ import androidx.annotation.NonNull;
 import com.annimon.stream.Stream;
 
 import net.sqlcipher.Cursor;
-import net.sqlcipher.database.SQLiteDatabase;
 
 import org.thoughtcrime.securesms.database.helpers.SQLCipherOpenHelper;
-import org.thoughtcrime.securesms.tracing.Trace;
 
 /**
  * Contains all databases necessary for full-text search (FTS).
  */
-@Trace
 public class SearchDatabase extends Database {
 
   public static final String SMS_FTS_TABLE_NAME = "sms_fts";
@@ -136,11 +133,7 @@ public class SearchDatabase extends Database {
       return null;
     }
 
-    Cursor cursor = db.rawQuery(MESSAGES_QUERY, new String[] { fullTextSearchQuery,
-                                                               fullTextSearchQuery });
-
-    setNotifyConversationListListeners(cursor);
-    return cursor;
+    return db.rawQuery(MESSAGES_QUERY, new String[] { fullTextSearchQuery, fullTextSearchQuery });
   }
 
   public Cursor queryMessages(@NonNull String query, long threadId) {
@@ -151,13 +144,10 @@ public class SearchDatabase extends Database {
       return null;
     }
 
-    Cursor cursor = db.rawQuery(MESSAGES_FOR_THREAD_QUERY, new String[] { fullTextSearchQuery,
-                                                                          String.valueOf(threadId),
-                                                                          fullTextSearchQuery,
-                                                                          String.valueOf(threadId) });
-
-    setNotifyConversationListListeners(cursor);
-    return cursor;
+    return db.rawQuery(MESSAGES_FOR_THREAD_QUERY, new String[] { fullTextSearchQuery,
+                                                                 String.valueOf(threadId),
+                                                                 fullTextSearchQuery,
+                                                                 String.valueOf(threadId) });
   }
 
   private static String createFullTextSearchQuery(@NonNull String query) {

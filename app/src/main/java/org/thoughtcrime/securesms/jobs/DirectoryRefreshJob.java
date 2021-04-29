@@ -3,14 +3,13 @@ package org.thoughtcrime.securesms.jobs;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import org.signal.core.util.logging.Log;
+import org.thoughtcrime.securesms.contacts.sync.DirectoryHelper;
 import org.thoughtcrime.securesms.jobmanager.Data;
 import org.thoughtcrime.securesms.jobmanager.Job;
 import org.thoughtcrime.securesms.jobmanager.impl.NetworkConstraint;
-import org.thoughtcrime.securesms.logging.Log;
-
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.recipients.RecipientId;
-import org.thoughtcrime.securesms.contacts.sync.DirectoryHelper;
 import org.whispersystems.signalservice.api.push.exceptions.PushNetworkException;
 
 import java.io.IOException;
@@ -19,7 +18,7 @@ public class DirectoryRefreshJob extends BaseJob {
 
   public static final String KEY = "DirectoryRefreshJob";
 
-  private static final String TAG = DirectoryRefreshJob.class.getSimpleName();
+  private static final String TAG = Log.tag(DirectoryRefreshJob.class);
 
   private static final String KEY_RECIPIENT           = "recipient";
   private static final String KEY_NOTIFY_OF_NEW_USERS = "notify_of_new_users";
@@ -60,6 +59,11 @@ public class DirectoryRefreshJob extends BaseJob {
   @Override
   public @NonNull String getFactoryKey() {
     return KEY;
+  }
+
+  @Override
+  protected boolean shouldTrace() {
+    return true;
   }
 
   @Override

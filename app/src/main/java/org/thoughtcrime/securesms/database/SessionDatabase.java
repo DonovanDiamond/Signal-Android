@@ -4,15 +4,15 @@ package org.thoughtcrime.securesms.database;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import net.sqlcipher.database.SQLiteDatabase;
-
 import org.thoughtcrime.securesms.database.helpers.SQLCipherOpenHelper;
-import org.thoughtcrime.securesms.logging.Log;
+
+import org.signal.core.util.logging.Log;
+import org.thoughtcrime.securesms.database.helpers.SQLCipherOpenHelper;
 import org.thoughtcrime.securesms.recipients.RecipientId;
-import org.thoughtcrime.securesms.tracing.Trace;
 import org.thoughtcrime.securesms.util.SqlUtil;
 import org.whispersystems.libsignal.state.SessionRecord;
 import org.whispersystems.signalservice.api.push.SignalServiceAddress;
@@ -21,10 +21,9 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 
-@Trace
 public class SessionDatabase extends Database {
 
-  private static final String TAG = SessionDatabase.class.getSimpleName();
+  private static final String TAG = Log.tag(SessionDatabase.class);
 
   public static final String TABLE_NAME = "sessions";
 

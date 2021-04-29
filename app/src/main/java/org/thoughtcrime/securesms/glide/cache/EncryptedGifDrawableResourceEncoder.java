@@ -2,7 +2,6 @@ package org.thoughtcrime.securesms.glide.cache;
 
 
 import androidx.annotation.NonNull;
-import org.thoughtcrime.securesms.logging.Log;
 
 import com.bumptech.glide.load.EncodeStrategy;
 import com.bumptech.glide.load.Options;
@@ -11,13 +10,15 @@ import com.bumptech.glide.load.engine.Resource;
 import com.bumptech.glide.load.resource.gif.GifDrawable;
 import com.bumptech.glide.util.ByteBufferUtil;
 
+import org.signal.core.util.logging.Log;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 
 public class EncryptedGifDrawableResourceEncoder extends EncryptedCoder implements ResourceEncoder<GifDrawable> {
 
-  private static final String TAG = EncryptedGifDrawableResourceEncoder.class.getSimpleName();
+  private static final String TAG = Log.tag(EncryptedGifDrawableResourceEncoder.class);
 
   private final byte[] secret;
 

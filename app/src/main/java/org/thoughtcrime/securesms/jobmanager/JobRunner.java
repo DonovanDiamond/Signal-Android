@@ -2,11 +2,12 @@ package org.thoughtcrime.securesms.jobmanager;
 
 import android.app.Application;
 import android.os.PowerManager;
+
 import androidx.annotation.NonNull;
 
 import com.annimon.stream.Stream;
 
-import org.thoughtcrime.securesms.logging.Log;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.util.WakeLockUtil;
 
 import java.util.List;
@@ -22,7 +23,7 @@ import java.util.concurrent.TimeUnit;
  */
 class JobRunner extends Thread {
 
-  private static final String TAG = JobRunner.class.getSimpleName();
+  private static final String TAG = Log.tag(JobRunner.class);
 
   private static long WAKE_LOCK_TIMEOUT = TimeUnit.MINUTES.toMillis(10);
 
@@ -52,7 +53,7 @@ class JobRunner extends Thread {
       if (result.isSuccess()) {
         jobController.onSuccess(job, result.getOutputData());
       } else if (result.isRetry()) {
-        jobController.onRetry(job);
+        jobController.onRetry(job, result.getBackoffInterval());
         job.onRetry();
       } else if (result.isFailure()) {
         List<Job> dependents = jobController.onFailure(job);

@@ -5,13 +5,15 @@ import android.content.Context;
 
 import androidx.annotation.NonNull;
 
-import org.greenrobot.eventbus.EventBus;
+import org.signal.core.util.concurrent.SignalExecutors;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.BuildConfig;
 import org.thoughtcrime.securesms.components.TypingStatusRepository;
 import org.thoughtcrime.securesms.components.TypingStatusSender;
+import org.thoughtcrime.securesms.crypto.DatabaseSessionLock;
 import org.thoughtcrime.securesms.crypto.storage.SignalProtocolStoreImpl;
-import org.thoughtcrime.securesms.database.DatabaseFactory;
-import org.thoughtcrime.securesms.events.ReminderUpdateEvent;
+import org.thoughtcrime.securesms.database.DatabaseObserver;
+import org.thoughtcrime.securesms.database.JobDatabase;
 import org.thoughtcrime.securesms.jobmanager.JobManager;
 import org.thoughtcrime.securesms.jobmanager.JobMigrator;
 import org.thoughtcrime.securesms.jobmanager.impl.FactoryJobPredicate;
@@ -27,24 +29,32 @@ import org.thoughtcrime.securesms.jobs.PushProcessMessageJob;
 import org.thoughtcrime.securesms.jobs.PushTextSendJob;
 import org.thoughtcrime.securesms.jobs.ReactionSendJob;
 import org.thoughtcrime.securesms.jobs.TypingSendJob;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.megaphone.MegaphoneRepository;
 import org.thoughtcrime.securesms.messages.BackgroundMessageRetriever;
 import org.thoughtcrime.securesms.messages.IncomingMessageObserver;
 import org.thoughtcrime.securesms.messages.IncomingMessageProcessor;
+import org.thoughtcrime.securesms.net.PipeConnectivityListener;
 import org.thoughtcrime.securesms.notifications.DefaultMessageNotifier;
 import org.thoughtcrime.securesms.notifications.MessageNotifier;
+import org.thoughtcrime.securesms.notifications.v2.MessageNotifierV2;
 import org.thoughtcrime.securesms.notifications.OptimizedMessageNotifier;
+import org.thoughtcrime.securesms.payments.MobileCoinConfig;
+import org.thoughtcrime.securesms.payments.Payments;
 import org.thoughtcrime.securesms.push.SecurityEventListener;
 import org.thoughtcrime.securesms.push.SignalServiceNetworkAccess;
 import org.thoughtcrime.securesms.recipients.LiveRecipientCache;
+import org.thoughtcrime.securesms.revealable.ViewOnceMessageManager;
+import org.thoughtcrime.securesms.service.ExpiringMessageManager;
 import org.thoughtcrime.securesms.service.TrimThreadsByDateManager;
+import org.thoughtcrime.securesms.service.webrtc.SignalCallManager;
+import org.thoughtcrime.securesms.shakereport.ShakeToReport;
 import org.thoughtcrime.securesms.util.AlarmSleepTimer;
+import org.thoughtcrime.securesms.util.AppForegroundObserver;
+import org.thoughtcrime.securesms.util.ByteUnit;
 import org.thoughtcrime.securesms.util.EarlyMessageCache;
 import org.thoughtcrime.securesms.util.FeatureFlags;
 import org.thoughtcrime.securesms.util.FrameRateTracker;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
-import org.thoughtcrime.securesms.util.concurrent.SignalExecutors;
 import org.whispersystems.libsignal.util.guava.Optional;
 import org.whispersystems.signalservice.api.SignalServiceAccountManager;
 import org.whispersystems.signalservice.api.SignalServiceMessageReceiver;
@@ -54,7 +64,6 @@ import org.whispersystems.signalservice.api.groupsv2.GroupsV2Operations;
 import org.whispersystems.signalservice.api.util.CredentialsProvider;
 import org.whispersystems.signalservice.api.util.SleepTimer;
 import org.whispersystems.signalservice.api.util.UptimeSleepTimer;
-import org.whispersystems.signalservice.api.websocket.ConnectivityListener;
 
 import java.util.UUID;
 
@@ -65,16 +74,21 @@ public class ApplicationDependencyProvider implements ApplicationDependencies.Pr
 
   private static final String TAG = Log.tag(ApplicationDependencyProvider.class);
 
-  private final Application                context;
-  private final SignalServiceNetworkAccess networkAccess;
+  private final Application              context;
+  private final PipeConnectivityListener pipeListener;
 
-  public ApplicationDependencyProvider(@NonNull Application context, @NonNull SignalServiceNetworkAccess networkAccess) {
-    this.context       = context;
-    this.networkAccess = networkAccess;
+  public ApplicationDependencyProvider(@NonNull Application context) {
+    this.context      = context;
+    this.pipeListener = new PipeConnectivityListener(context);
   }
 
   private @NonNull ClientZkOperations provideClientZkOperations() {
-    return ClientZkOperations.create(networkAccess.getConfiguration(context));
+    return ClientZkOperations.create(provideSignalServiceNetworkAccess().getConfiguration(context));
+  }
+
+  @Override
+  public @NonNull PipeConnectivityListener providePipeListener() {
+    return pipeListener;
   }
 
   @Override
@@ -84,17 +98,19 @@ public class ApplicationDependencyProvider implements ApplicationDependencies.Pr
 
   @Override
   public @NonNull SignalServiceAccountManager provideSignalServiceAccountManager() {
-    return new SignalServiceAccountManager(networkAccess.getConfiguration(context),
+    return new SignalServiceAccountManager(provideSignalServiceNetworkAccess().getConfiguration(context),
                                            new DynamicCredentialsProvider(context),
                                            BuildConfig.SIGNAL_AGENT,
-                                           provideGroupsV2Operations());
+                                           provideGroupsV2Operations(),
+                                           FeatureFlags.okHttpAutomaticRetry());
   }
 
   @Override
   public @NonNull SignalServiceMessageSender provideSignalServiceMessageSender() {
-      return new SignalServiceMessageSender(networkAccess.getConfiguration(context),
+      return new SignalServiceMessageSender(provideSignalServiceNetworkAccess().getConfiguration(context),
                                             new DynamicCredentialsProvider(context),
                                             new SignalProtocolStoreImpl(context),
+                                            DatabaseSessionLock.INSTANCE,
                                             BuildConfig.SIGNAL_AGENT,
                                             TextSecurePreferences.isMultiDevice(context),
                                             Optional.fromNullable(IncomingMessageObserver.getPipe()),
@@ -102,24 +118,26 @@ public class ApplicationDependencyProvider implements ApplicationDependencies.Pr
                                             Optional.of(new SecurityEventListener(context)),
                                             provideClientZkOperations().getProfileOperations(),
                                             SignalExecutors.newCachedBoundedExecutor("signal-messages", 1, 16),
-                                            FeatureFlags.maxEnvelopeSize());
+                                            ByteUnit.KILOBYTES.toBytes(512),
+                                            FeatureFlags.okHttpAutomaticRetry());
   }
 
   @Override
   public @NonNull SignalServiceMessageReceiver provideSignalServiceMessageReceiver() {
     SleepTimer sleepTimer = TextSecurePreferences.isFcmDisabled(context) ? new AlarmSleepTimer(context)
                                                                          : new UptimeSleepTimer();
-    return new SignalServiceMessageReceiver(networkAccess.getConfiguration(context),
+    return new SignalServiceMessageReceiver(provideSignalServiceNetworkAccess().getConfiguration(context),
                                             new DynamicCredentialsProvider(context),
                                             BuildConfig.SIGNAL_AGENT,
-                                            new PipeConnectivityListener(),
+                                            pipeListener,
                                             sleepTimer,
-                                            provideClientZkOperations().getProfileOperations());
+                                            provideClientZkOperations().getProfileOperations(),
+                                            FeatureFlags.okHttpAutomaticRetry());
   }
 
   @Override
   public @NonNull SignalServiceNetworkAccess provideSignalServiceNetworkAccess() {
-    return networkAccess;
+    return new SignalServiceNetworkAccess(context);
   }
 
   @Override
@@ -139,16 +157,17 @@ public class ApplicationDependencyProvider implements ApplicationDependencies.Pr
 
   @Override
   public @NonNull JobManager provideJobManager() {
-    return new JobManager(context, new JobManager.Configuration.Builder()
-                                                               .setDataSerializer(new JsonDataSerializer())
-                                                               .setJobFactories(JobManagerFactories.getJobFactories(context))
-                                                               .setConstraintFactories(JobManagerFactories.getConstraintFactories(context))
-                                                               .setConstraintObservers(JobManagerFactories.getConstraintObservers(context))
-                                                               .setJobStorage(new FastJobStorage(DatabaseFactory.getJobDatabase(context), SignalExecutors.newCachedSingleThreadExecutor("signal-fast-job-storage")))
-                                                               .setJobMigrator(new JobMigrator(TextSecurePreferences.getJobManagerVersion(context), JobManager.CURRENT_VERSION, JobManagerFactories.getJobMigrations(context)))
-                                                               .addReservedJobRunner(new FactoryJobPredicate(PushDecryptMessageJob.KEY, PushProcessMessageJob.KEY, MarkerJob.KEY))
-                                                               .addReservedJobRunner(new FactoryJobPredicate(PushTextSendJob.KEY, PushMediaSendJob.KEY, PushGroupSendJob.KEY, ReactionSendJob.KEY, TypingSendJob.KEY, GroupCallUpdateSendJob.KEY))
-                                                               .build());
+    JobManager.Configuration config = new JobManager.Configuration.Builder()
+                                                                  .setDataSerializer(new JsonDataSerializer())
+                                                                  .setJobFactories(JobManagerFactories.getJobFactories(context))
+                                                                  .setConstraintFactories(JobManagerFactories.getConstraintFactories(context))
+                                                                  .setConstraintObservers(JobManagerFactories.getConstraintObservers(context))
+                                                                  .setJobStorage(new FastJobStorage(JobDatabase.getInstance(context)))
+                                                                  .setJobMigrator(new JobMigrator(TextSecurePreferences.getJobManagerVersion(context), JobManager.CURRENT_VERSION, JobManagerFactories.getJobMigrations(context)))
+                                                                  .addReservedJobRunner(new FactoryJobPredicate(PushDecryptMessageJob.KEY, PushProcessMessageJob.KEY, MarkerJob.KEY))
+                                                                  .addReservedJobRunner(new FactoryJobPredicate(PushTextSendJob.KEY, PushMediaSendJob.KEY, PushGroupSendJob.KEY, ReactionSendJob.KEY, TypingSendJob.KEY, GroupCallUpdateSendJob.KEY))
+                                                                  .build();
+    return new JobManager(context, config);
   }
 
   @Override
@@ -167,7 +186,7 @@ public class ApplicationDependencyProvider implements ApplicationDependencies.Pr
 
   @Override
   public @NonNull MessageNotifier provideMessageNotifier() {
-    return new OptimizedMessageNotifier(new DefaultMessageNotifier());
+    return new OptimizedMessageNotifier(context);
   }
 
   @Override
@@ -181,13 +200,55 @@ public class ApplicationDependencyProvider implements ApplicationDependencies.Pr
   }
 
   @Override
+  public @NonNull ViewOnceMessageManager provideViewOnceMessageManager() {
+    return new ViewOnceMessageManager(context);
+  }
+
+  @Override
+  public @NonNull ExpiringMessageManager provideExpiringMessageManager() {
+    return new ExpiringMessageManager(context);
+  }
+
+  @Override
   public @NonNull TypingStatusRepository provideTypingStatusRepository() {
     return new TypingStatusRepository();
   }
 
   @Override
   public @NonNull TypingStatusSender provideTypingStatusSender() {
-    return new TypingStatusSender(context);
+    return new TypingStatusSender();
+  }
+
+  @Override
+  public @NonNull DatabaseObserver provideDatabaseObserver() {
+    return new DatabaseObserver(context);
+  }
+
+  @SuppressWarnings("ConstantConditions")
+  @Override
+  public @NonNull Payments providePayments(@NonNull SignalServiceAccountManager signalServiceAccountManager) {
+    MobileCoinConfig network;
+
+    if      (BuildConfig.MOBILE_COIN_ENVIRONMENT.equals("mainnet")) network = MobileCoinConfig.getMainNet(signalServiceAccountManager);
+    else if (BuildConfig.MOBILE_COIN_ENVIRONMENT.equals("testnet")) network = MobileCoinConfig.getTestNet(signalServiceAccountManager);
+    else throw new AssertionError("Unknown network " + BuildConfig.MOBILE_COIN_ENVIRONMENT);
+
+    return new Payments(network);
+  }
+
+  @Override
+  public @NonNull ShakeToReport provideShakeToReport() {
+    return new ShakeToReport(context);
+  }
+
+  @Override
+  public @NonNull AppForegroundObserver provideAppForegroundObserver() {
+    return new AppForegroundObserver();
+  }
+
+  @Override
+  public @NonNull SignalCallManager provideSignalCallManager() {
+    return new SignalCallManager(context);
   }
 
   private static class DynamicCredentialsProvider implements CredentialsProvider {
@@ -211,37 +272,6 @@ public class ApplicationDependencyProvider implements ApplicationDependencies.Pr
     @Override
     public String getPassword() {
       return TextSecurePreferences.getPushServerPassword(context);
-    }
-
-    @Override
-    public String getSignalingKey() {
-      return TextSecurePreferences.getSignalingKey(context);
-    }
-  }
-
-  private class PipeConnectivityListener implements ConnectivityListener {
-
-    @Override
-    public void onConnected() {
-      Log.i(TAG, "onConnected()");
-      TextSecurePreferences.setUnauthorizedReceived(context, false);
-    }
-
-    @Override
-    public void onConnecting() {
-      Log.i(TAG, "onConnecting()");
-    }
-
-    @Override
-    public void onDisconnected() {
-      Log.w(TAG, "onDisconnected()");
-    }
-
-    @Override
-    public void onAuthenticationFailure() {
-      Log.w(TAG, "onAuthenticationFailure()");
-      TextSecurePreferences.setUnauthorizedReceived(context, true);
-      EventBus.getDefault().post(new ReminderUpdateEvent());
     }
   }
 }

@@ -6,14 +6,14 @@ import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+
 import androidx.annotation.NonNull;
 
 import com.annimon.stream.Stream;
 
-import org.thoughtcrime.securesms.ApplicationContext;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.BuildConfig;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
-import org.thoughtcrime.securesms.logging.Log;
 
 import java.util.List;
 import java.util.UUID;
@@ -32,7 +32,7 @@ import java.util.UUID;
  */
 public class AlarmManagerScheduler implements Scheduler {
 
-  private static final String TAG = AlarmManagerScheduler.class.getSimpleName();
+  private static final String TAG = Log.tag(AlarmManagerScheduler.class);
 
   private final Application application;
 

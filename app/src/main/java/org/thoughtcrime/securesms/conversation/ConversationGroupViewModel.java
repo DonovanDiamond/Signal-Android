@@ -6,6 +6,7 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.WorkerThread;
+import androidx.fragment.app.FragmentManager;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.Transformations;
@@ -14,6 +15,7 @@ import androidx.lifecycle.ViewModelProvider;
 
 import com.annimon.stream.Stream;
 
+import org.signal.core.util.concurrent.SignalExecutors;
 import org.thoughtcrime.securesms.database.DatabaseFactory;
 import org.thoughtcrime.securesms.database.GroupDatabase;
 import org.thoughtcrime.securesms.database.GroupDatabase.GroupRecord;
@@ -22,22 +24,21 @@ import org.thoughtcrime.securesms.groups.GroupChangeBusyException;
 import org.thoughtcrime.securesms.groups.GroupChangeFailedException;
 import org.thoughtcrime.securesms.groups.GroupId;
 import org.thoughtcrime.securesms.groups.GroupManager;
-import org.thoughtcrime.securesms.groups.ui.GroupChangeFailureReason;
 import org.thoughtcrime.securesms.groups.GroupsV1MigrationUtil;
+import org.thoughtcrime.securesms.groups.ui.GroupChangeFailureReason;
+import org.thoughtcrime.securesms.groups.ui.invitesandrequests.invite.GroupLinkInviteFriendsBottomSheetDialogFragment;
 import org.thoughtcrime.securesms.profiles.spoofing.ReviewRecipient;
 import org.thoughtcrime.securesms.profiles.spoofing.ReviewUtil;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.recipients.RecipientId;
 import org.thoughtcrime.securesms.util.AsynchronousCallback;
 import org.thoughtcrime.securesms.util.FeatureFlags;
-import org.thoughtcrime.securesms.util.SetUtil;
-import org.thoughtcrime.securesms.util.concurrent.SignalExecutors;
+import org.thoughtcrime.securesms.util.concurrent.SimpleTask;
 import org.thoughtcrime.securesms.util.livedata.LiveDataUtil;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 final class ConversationGroupViewModel extends ViewModel {
@@ -51,6 +52,8 @@ final class ConversationGroupViewModel extends ViewModel {
   private final LiveData<ReviewState>               reviewState;
   private final LiveData<List<RecipientId>>         gv1MigrationSuggestions;
   private final LiveData<Boolean>                   gv1MigrationReminder;
+
+  private boolean firstTimeInviteFriendsTriggered;
 
   private ConversationGroupViewModel() {
     this.liveRecipient = new MutableLiveData<>();
@@ -83,10 +86,10 @@ final class ConversationGroupViewModel extends ViewModel {
     liveRecipient.setValue(recipient);
   }
 
-  void onSuggestedMembersBannerDismissed(@NonNull GroupId groupId) {
+  void onSuggestedMembersBannerDismissed(@NonNull GroupId groupId, @NonNull List<RecipientId> suggestions) {
     SignalExecutors.BOUNDED.execute(() -> {
       if (groupId.isV2()) {
-        DatabaseFactory.getGroupDatabase(ApplicationDependencies.getApplication()).clearFormerV1Members(groupId.requireV2());
+        DatabaseFactory.getGroupDatabase(ApplicationDependencies.getApplication()).removeUnmigratedV1Members(groupId.requireV2(), suggestions);
         liveRecipient.postValue(liveRecipient.getValue());
       }
     });
@@ -138,7 +141,6 @@ final class ConversationGroupViewModel extends ViewModel {
 
   private static int mapToActionableRequestingMemberCount(@Nullable GroupRecord record) {
     if (record != null                          &&
-        FeatureFlags.groupsV2manageGroupLinks() &&
         record.isV2Group()                      &&
         record.memberLevel(Recipient.self()) == GroupDatabase.MemberLevel.ADMINISTRATOR)
     {
@@ -170,9 +172,17 @@ final class ConversationGroupViewModel extends ViewModel {
       return Collections.emptyList();
     }
 
-    Set<RecipientId> difference = SetUtil.difference(record.getFormerV1Members(), record.getMembers());
+    if (!record.isV2Group()) {
+      return Collections.emptyList();
+    }
 
-    return Stream.of(Recipient.resolvedList(difference))
+    if (!record.isActive() || record.isPendingMember(Recipient.self())) {
+      return Collections.emptyList();
+    }
+
+    return Stream.of(record.getUnmigratedV1Members())
+                 .filterNot(m -> record.getMembers().contains(m))
+                 .map(Recipient::resolved)
                  .filter(GroupsV1MigrationUtil::isAutoMigratable)
                  .map(Recipient::getId)
                  .toList();
@@ -180,7 +190,13 @@ final class ConversationGroupViewModel extends ViewModel {
 
   @WorkerThread
   private static boolean mapToGroupV1MigrationReminder(@Nullable GroupRecord record) {
-    if (record == null || !record.isV1Group() || !record.isActive() || !FeatureFlags.groupsV1ManualMigration()) {
+    if (record == null                                                                      ||
+        !record.isV1Group()                                                                 ||
+        !record.isActive()                                                                  ||
+        FeatureFlags.groupsV1ForcedMigration()                                              ||
+        Recipient.self().getGroupsV1MigrationCapability() != Recipient.Capability.SUPPORTED ||
+        !Recipient.resolved(record.getRecipientId()).isProfileSharing())
+    {
       return false;
     }
 
@@ -212,6 +228,28 @@ final class ConversationGroupViewModel extends ViewModel {
         callback.onError(GroupChangeFailureReason.fromException(e));
       }
     });
+  }
+
+  void inviteFriendsOneTimeIfJustSelfInGroup(@NonNull FragmentManager supportFragmentManager, @NonNull GroupId.V2 groupId) {
+    if (firstTimeInviteFriendsTriggered) {
+      return;
+    }
+
+    firstTimeInviteFriendsTriggered = true;
+
+    SimpleTask.run(() -> DatabaseFactory.getGroupDatabase(ApplicationDependencies.getApplication())
+                                        .requireGroup(groupId)
+                                        .getMembers().equals(Collections.singletonList(Recipient.self().getId())),
+                   justSelf -> {
+                     if (justSelf) {
+                       inviteFriends(supportFragmentManager, groupId);
+                     }
+                   }
+    );
+  }
+
+  void inviteFriends(@NonNull FragmentManager supportFragmentManager, @NonNull GroupId.V2 groupId) {
+    GroupLinkInviteFriendsBottomSheetDialogFragment.show(supportFragmentManager, groupId);
   }
 
   static final class ReviewState {

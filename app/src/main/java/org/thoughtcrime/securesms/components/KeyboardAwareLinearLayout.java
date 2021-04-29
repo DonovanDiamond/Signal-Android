@@ -22,13 +22,13 @@ import android.graphics.Rect;
 import android.os.Build;
 import android.os.Build.VERSION_CODES;
 import android.preference.PreferenceManager;
-import androidx.appcompat.widget.LinearLayoutCompat;
-
 import android.util.AttributeSet;
-import org.thoughtcrime.securesms.logging.Log;
 import android.view.Surface;
 import android.view.View;
 
+import androidx.appcompat.widget.LinearLayoutCompat;
+
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.util.ServiceUtil;
 import org.thoughtcrime.securesms.util.Util;
@@ -43,7 +43,7 @@ import java.util.Set;
  * has been opened and what its height would be.
  */
 public class KeyboardAwareLinearLayout extends LinearLayoutCompat {
-  private static final String TAG = KeyboardAwareLinearLayout.class.getSimpleName();
+  private static final String TAG = Log.tag(KeyboardAwareLinearLayout.class);
 
   private final Rect                          rect                       = new Rect();
   private final Set<OnKeyboardHiddenListener> hiddenListeners            = new HashSet<>();

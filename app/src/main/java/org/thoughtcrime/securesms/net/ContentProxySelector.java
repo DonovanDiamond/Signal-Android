@@ -1,8 +1,7 @@
 package org.thoughtcrime.securesms.net;
 
 
-import org.thoughtcrime.securesms.logging.Log;
-
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.BuildConfig;
 
 import java.io.IOException;
@@ -19,7 +18,7 @@ import java.util.Set;
 
 public class ContentProxySelector extends ProxySelector {
 
-  private static final String TAG = ContentProxySelector.class.getSimpleName();
+  private static final String TAG = Log.tag(ContentProxySelector.class);
 
   public static final Set<String> WHITELISTED_DOMAINS = new HashSet<>();
   static {

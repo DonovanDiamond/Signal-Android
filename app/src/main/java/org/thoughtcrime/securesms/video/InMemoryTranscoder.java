@@ -10,7 +10,7 @@ import androidx.annotation.RequiresApi;
 
 import com.google.android.exoplayer2.util.MimeTypes;
 
-import org.thoughtcrime.securesms.logging.Log;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.media.MediaInput;
 import org.thoughtcrime.securesms.mms.MediaStream;
 import org.thoughtcrime.securesms.util.MemoryFileDescriptor;
@@ -39,14 +39,14 @@ public final class InMemoryTranscoder implements Closeable {
   private final           long                           memoryFileEstimate;
   private final           boolean                        transcodeRequired;
   private final           long                           fileSizeEstimate;
-  private final @Nullable Options                        options;
+  private final @Nullable TranscoderOptions              options;
 
   private @Nullable MemoryFileDescriptor memoryFile;
 
   /**
    * @param upperSizeLimit A upper size to transcode to. The actual output size can be up to 10% smaller.
    */
-  public InMemoryTranscoder(@NonNull Context context, @NonNull MediaDataSource dataSource, @Nullable Options options, long upperSizeLimit) throws IOException, VideoSourceException {
+  public InMemoryTranscoder(@NonNull Context context, @NonNull MediaDataSource dataSource, @Nullable TranscoderOptions options, long upperSizeLimit) throws IOException, VideoSourceException {
     this.context    = context;
     this.dataSource = dataSource;
     this.options    = options;
@@ -75,7 +75,7 @@ public final class InMemoryTranscoder implements Closeable {
   }
 
   public @NonNull MediaStream transcode(@NonNull Progress progress,
-                                        @Nullable CancelationSignal cancelationSignal)
+                                        @Nullable TranscoderCancelationSignal cancelationSignal)
       throws IOException, EncodingException, VideoSizeException
   {
     if (memoryFile != null) throw new AssertionError("Not expecting to reuse transcoder");
@@ -201,19 +201,5 @@ public final class InMemoryTranscoder implements Closeable {
 
   public interface Progress {
     void onProgress(int percent);
-  }
-
-  public interface CancelationSignal {
-    boolean isCanceled();
-  }
-
-  public final static class Options {
-    final long startTimeUs;
-    final long endTimeUs;
-
-    public Options(long startTimeUs, long endTimeUs) {
-      this.startTimeUs = startTimeUs;
-      this.endTimeUs   = endTimeUs;
-    }
   }
 }

@@ -2,10 +2,9 @@ package org.thoughtcrime.securesms.service;
 
 import android.content.Context;
 
-import org.thoughtcrime.securesms.database.MessageDatabase;
-import org.thoughtcrime.securesms.logging.Log;
-
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.database.DatabaseFactory;
+import org.thoughtcrime.securesms.database.MessageDatabase;
 import org.thoughtcrime.securesms.database.MmsDatabase;
 import org.thoughtcrime.securesms.database.SmsDatabase;
 import org.thoughtcrime.securesms.database.model.MessageRecord;
@@ -17,7 +16,7 @@ import java.util.concurrent.Executors;
 
 public class ExpiringMessageManager {
 
-  private static final String TAG = ExpiringMessageManager.class.getSimpleName();
+  private static final String TAG = Log.tag(ExpiringMessageManager.class);
 
   private final TreeSet<ExpiringMessageReference> expiringMessageReferences = new TreeSet<>(new ExpiringMessageComparator());
   private final Executor                          executor                  = Executors.newSingleThreadExecutor();

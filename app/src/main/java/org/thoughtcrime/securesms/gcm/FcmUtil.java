@@ -1,11 +1,12 @@
 package org.thoughtcrime.securesms.gcm;
 
-import androidx.annotation.WorkerThread;
 import android.text.TextUtils;
+
+import androidx.annotation.WorkerThread;
 
 import com.google.firebase.iid.FirebaseInstanceId;
 
-import org.thoughtcrime.securesms.logging.Log;
+import org.signal.core.util.logging.Log;
 import org.whispersystems.libsignal.util.guava.Optional;
 
 import java.util.concurrent.CountDownLatch;
@@ -13,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public final class FcmUtil {
 
-  private static final String TAG = FcmUtil.class.getSimpleName();
+  private static final String TAG = Log.tag(FcmUtil.class);
 
   /**
    * Retrieves the current FCM token. If one isn't available, it'll be generated.

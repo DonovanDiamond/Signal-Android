@@ -15,10 +15,11 @@ import androidx.lifecycle.ViewModelProvider;
 
 import com.annimon.stream.Stream;
 
+import org.signal.core.util.ThreadUtil;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.TransportOption;
 import org.thoughtcrime.securesms.database.ThreadDatabase;
 import org.thoughtcrime.securesms.database.model.Mention;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.mms.MediaConstraints;
 import org.thoughtcrime.securesms.mms.OutgoingMediaMessage;
 import org.thoughtcrime.securesms.mms.OutgoingSecureMediaMessage;
@@ -50,7 +51,7 @@ import java.util.Objects;
  */
 class MediaSendViewModel extends ViewModel {
 
-  private static final String TAG = MediaSendViewModel.class.getSimpleName();
+  private static final String TAG = Log.tag(MediaSendViewModel.class);
 
   private final Application                        application;
   private final MediaRepository                    repository;
@@ -144,7 +145,7 @@ class MediaSendViewModel extends ViewModel {
     }
 
     repository.getPopulatedMedia(context, newMedia, populatedMedia -> {
-      Util.runOnMain(() -> {
+      ThreadUtil.runOnMain(() -> {
         List<Media> filteredMedia = getFilteredMedia(context, populatedMedia, mediaConstraints);
 
         if (filteredMedia.size() != newMedia.size()) {
@@ -196,7 +197,7 @@ class MediaSendViewModel extends ViewModel {
     selectedMedia.setValue(Collections.singletonList(media));
 
     repository.getPopulatedMedia(context, Collections.singletonList(media), populatedMedia -> {
-      Util.runOnMain(() -> {
+      ThreadUtil.runOnMain(() -> {
         List<Media> filteredMedia = getFilteredMedia(context, populatedMedia, mediaConstraints);
 
         if (filteredMedia.isEmpty()) {
@@ -304,7 +305,7 @@ class MediaSendViewModel extends ViewModel {
     captionVisible = false;
 
     List<Media> uncaptioned = Stream.of(getSelectedMediaOrDefault())
-                                    .map(m -> new Media(m.getUri(), m.getMimeType(), m.getDate(), m.getWidth(), m.getHeight(), m.getSize(), m.getDuration(), m.isBorderless(), m.getBucketId(), Optional.absent(), Optional.absent()))
+                                    .map(m -> new Media(m.getUri(), m.getMimeType(), m.getDate(), m.getWidth(), m.getHeight(), m.getSize(), m.getDuration(), m.isBorderless(), m.isVideoGif(), m.getBucketId(), Optional.absent(), Optional.absent()))
                                     .toList();
 
     selectedMedia.setValue(uncaptioned);
@@ -407,7 +408,7 @@ class MediaSendViewModel extends ViewModel {
   }
 
   void onVideoBeginEdit(@NonNull Uri uri) {
-    cancelUpload(new Media(uri, "", 0, 0, 0, 0, 0, false, Optional.absent(), Optional.absent(), Optional.absent()));
+    cancelUpload(new Media(uri, "", 0, 0, 0, 0, 0, false, false, Optional.absent(), Optional.absent(), Optional.absent()));
   }
 
   void onMediaCaptured(@NonNull Media media) {
@@ -475,7 +476,7 @@ class MediaSendViewModel extends ViewModel {
 
       if (isSms || MessageSender.isLocalSelfSend(application, recipient, isSms)) {
         Log.i(TAG, "SMS or local self-send. Skipping pre-upload.");
-        result.postValue(MediaSendActivityResult.forTraditionalSend(updatedMedia, trimmedBody, transport, isViewOnce(), trimmedMentions));
+        result.postValue(MediaSendActivityResult.forTraditionalSend(recipient.getId(), updatedMedia, trimmedBody, transport, isViewOnce(), trimmedMentions));
         return;
       }
 
@@ -484,7 +485,7 @@ class MediaSendViewModel extends ViewModel {
 
       if (splitMessage.getTextSlide().isPresent()) {
         Slide slide = splitMessage.getTextSlide().get();
-        uploadRepository.startUpload(new Media(Objects.requireNonNull(slide.getUri()), slide.getContentType(), System.currentTimeMillis(), 0, 0, slide.getFileSize(), 0, slide.isBorderless(), Optional.absent(), Optional.absent(), Optional.absent()), recipient);
+        uploadRepository.startUpload(new Media(Objects.requireNonNull(slide.getUri()), slide.getContentType(), System.currentTimeMillis(), 0, 0, slide.getFileSize(), 0, slide.isBorderless(), slide.isVideoGif(), Optional.absent(), Optional.absent(), Optional.absent()), recipient);
       }
 
       uploadRepository.applyMediaUpdates(oldToNew, recipient);
@@ -494,9 +495,10 @@ class MediaSendViewModel extends ViewModel {
         if (recipients.size() > 0) {
           sendMessages(recipients, splitBody, uploadResults, trimmedMentions);
           uploadRepository.deleteAbandonedAttachments();
+          result.postValue(null);
+        } else {
+          result.postValue(MediaSendActivityResult.forPreUpload(recipient.getId(), uploadResults, splitBody, transport, isViewOnce(), trimmedMentions));
         }
-
-        result.postValue(MediaSendActivityResult.forPreUpload(uploadResults, splitBody, transport, isViewOnce(), trimmedMentions));
       });
     });
 
@@ -653,7 +655,7 @@ class MediaSendViewModel extends ViewModel {
 
       // XXX We must do this to avoid sending out messages to the same recipient with the same
       //     sentTimestamp. If we do this, they'll be considered dupes by the receiver.
-      Util.sleep(5);
+      ThreadUtil.sleep(5);
     }
 
     MessageSender.sendMediaBroadcast(application, messages, preUploadResults);

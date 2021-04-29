@@ -16,9 +16,9 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.lifecycle.ViewModelProviders;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.PassphraseRequiredActivity;
 import org.thoughtcrime.securesms.R;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.mms.DecryptableStreamUriLoader.DecryptableUri;
 import org.thoughtcrime.securesms.mms.GlideApp;
 import org.thoughtcrime.securesms.mms.PartAuthority;
@@ -127,7 +127,7 @@ public class ViewOnceMessageActivity extends PassphraseRequiredActivity implemen
     image.setVisibility(View.GONE);
     duration.setVisibility(View.VISIBLE);
 
-    VideoSlide videoSlide = new VideoSlide(this, uri, 0);
+    VideoSlide videoSlide = new VideoSlide(this, uri, 0, false);
 
     video.setWindow(getWindow());
     video.setPlayerStateCallbacks(this);

@@ -2,10 +2,11 @@ package org.thoughtcrime.securesms.mediasend;
 
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
-import androidx.annotation.NonNull;
 import android.view.Surface;
 
-import org.thoughtcrime.securesms.logging.Log;
+import androidx.annotation.NonNull;
+
+import org.signal.core.util.logging.Log;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -13,7 +14,7 @@ import java.util.List;
 
 class Camera1Controller {
 
-  private static final String TAG = Camera1Controller.class.getSimpleName();
+  private static final String TAG = Log.tag(Camera1Controller.class);
 
   private final int                  screenWidth;
   private final int                  screenHeight;

@@ -6,7 +6,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.WorkerThread;
 
-import org.thoughtcrime.securesms.BuildConfig;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.KbsEnclave;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.jobmanager.JobTracker;
@@ -18,10 +18,10 @@ import org.thoughtcrime.securesms.keyvalue.SignalStore;
 import org.thoughtcrime.securesms.lock.PinHashing;
 import org.thoughtcrime.securesms.lock.RegistrationLockReminders;
 import org.thoughtcrime.securesms.lock.v2.PinKeyboardType;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.megaphone.Megaphones;
 import org.thoughtcrime.securesms.registration.service.KeyBackupSystemWrongPinException;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
+import org.whispersystems.libsignal.InvalidKeyException;
 import org.whispersystems.libsignal.util.guava.Optional;
 import org.whispersystems.signalservice.api.KbsPinData;
 import org.whispersystems.signalservice.api.KeyBackupService;
@@ -29,14 +29,11 @@ import org.whispersystems.signalservice.api.KeyBackupServicePinException;
 import org.whispersystems.signalservice.api.KeyBackupSystemNoDataException;
 import org.whispersystems.signalservice.api.kbs.HashedPin;
 import org.whispersystems.signalservice.api.kbs.MasterKey;
-import org.whispersystems.signalservice.api.push.exceptions.NonSuccessfulResponseCodeException;
 import org.whispersystems.signalservice.internal.contacts.crypto.UnauthenticatedResponseException;
 import org.whispersystems.signalservice.internal.contacts.entities.TokenResponse;
 
 import java.io.IOException;
-import java.security.SecureRandom;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
@@ -90,7 +87,7 @@ public final class PinState {
       }
 
       return kbsData;
-    } catch (UnauthenticatedResponseException e) {
+    } catch (UnauthenticatedResponseException | InvalidKeyException e) {
       Log.w(TAG, "Failed to restore key", e);
       throw new IOException(e);
     } catch (KeyBackupServicePinException e) {
@@ -129,7 +126,7 @@ public final class PinState {
       Log.i(TAG, "Has a PIN to restore.");
       SignalStore.kbsValues().clearRegistrationLockAndPin();
       TextSecurePreferences.setV1RegistrationLockEnabled(context, false);
-      SignalStore.storageServiceValues().setNeedsAccountRestore(true);
+      SignalStore.storageService().setNeedsAccountRestore(true);
     } else {
       Log.i(TAG, "No registration lock or PIN at all.");
       SignalStore.kbsValues().clearRegistrationLockAndPin();
@@ -148,7 +145,7 @@ public final class PinState {
     SignalStore.kbsValues().setKbsMasterKey(kbsData, pin);
     SignalStore.kbsValues().setV2RegistrationLockEnabled(false);
     SignalStore.pinValues().resetPinReminders();
-    SignalStore.storageServiceValues().setNeedsAccountRestore(false);
+    SignalStore.storageService().setNeedsAccountRestore(false);
     resetPinRetryCount(context, pin);
     ClearFallbackKbsEnclaveJob.clearAll();
 
@@ -160,7 +157,7 @@ public final class PinState {
    */
   public static synchronized void onPinRestoreForgottenOrSkipped() {
     SignalStore.kbsValues().clearRegistrationLockAndPin();
-    SignalStore.storageServiceValues().setNeedsAccountRestore(false);
+    SignalStore.storageService().setNeedsAccountRestore(false);
 
     updateState(buildInferredStateFromOtherFields());
   }
@@ -170,7 +167,7 @@ public final class PinState {
    */
   @WorkerThread
   public static synchronized void onPinChangedOrCreated(@NonNull Context context, @NonNull String pin, @NonNull PinKeyboardType keyboard)
-      throws IOException, UnauthenticatedResponseException
+      throws IOException, UnauthenticatedResponseException, InvalidKeyException
   {
     Log.i(TAG, "onPinChangedOrCreated()");
 
@@ -272,7 +269,7 @@ public final class PinState {
    */
   @WorkerThread
   public static synchronized void onMigrateToRegistrationLockV2(@NonNull Context context, @NonNull String pin)
-      throws IOException, UnauthenticatedResponseException
+      throws IOException, UnauthenticatedResponseException, InvalidKeyException
   {
     Log.i(TAG, "onMigrateToRegistrationLockV2()");
 

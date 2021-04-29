@@ -1,27 +1,25 @@
 package org.thoughtcrime.securesms.jobs;
 
 import android.app.Activity;
-import androidx.annotation.NonNull;
 import android.telephony.SmsManager;
 
-import org.thoughtcrime.securesms.database.Database;
+import androidx.annotation.NonNull;
+
+import org.signal.core.util.logging.Log;
+import org.thoughtcrime.securesms.database.DatabaseFactory;
 import org.thoughtcrime.securesms.database.MessageDatabase;
+import org.thoughtcrime.securesms.database.NoSuchMessageException;
+import org.thoughtcrime.securesms.database.model.SmsMessageRecord;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.jobmanager.Data;
 import org.thoughtcrime.securesms.jobmanager.Job;
-import org.thoughtcrime.securesms.logging.Log;
-
-import org.thoughtcrime.securesms.database.DatabaseFactory;
-import org.thoughtcrime.securesms.database.NoSuchMessageException;
-import org.thoughtcrime.securesms.database.SmsDatabase;
-import org.thoughtcrime.securesms.database.model.SmsMessageRecord;
 import org.thoughtcrime.securesms.service.SmsDeliveryListener;
 
 public class SmsSentJob extends BaseJob {
 
   public static final String KEY = "SmsSentJob";
 
-  private static final String TAG = SmsSentJob.class.getSimpleName();
+  private static final String TAG = Log.tag(SmsSentJob.class);
 
   private static final String KEY_MESSAGE_ID  = "message_id";
   private static final String KEY_ACTION      = "action";

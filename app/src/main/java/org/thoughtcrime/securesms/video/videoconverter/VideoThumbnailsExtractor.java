@@ -9,7 +9,7 @@ import android.opengl.GLES20;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
-import org.thoughtcrime.securesms.logging.Log;
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.media.MediaInput;
 
 import java.io.IOException;
@@ -105,7 +105,11 @@ final class VideoThumbnailsExtractor {
         outputSurface.release();
       }
       if (decoder != null) {
-        decoder.stop();
+        try {
+          decoder.stop();
+        } catch (MediaCodec.CodecException codecException) {
+          Log.w(TAG, "Decoder stop failed: " + codecException.getDiagnosticInfo(), codecException);
+        }
         decoder.release();
       }
       if (extractor != null) {

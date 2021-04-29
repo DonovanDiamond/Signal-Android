@@ -20,14 +20,20 @@ import androidx.core.app.RemoteInput;
 import androidx.core.graphics.drawable.IconCompat;
 
 import com.annimon.stream.Stream;
+import com.bumptech.glide.load.MultiTransformation;
+import com.bumptech.glide.load.Transformation;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import com.bumptech.glide.load.resource.bitmap.CircleCrop;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.R;
 import org.thoughtcrime.securesms.contacts.avatars.ContactColors;
 import org.thoughtcrime.securesms.contacts.avatars.ContactPhoto;
 import org.thoughtcrime.securesms.contacts.avatars.FallbackContactPhoto;
 import org.thoughtcrime.securesms.contacts.avatars.GeneratedContactPhoto;
-import org.thoughtcrime.securesms.logging.Log;
+import org.thoughtcrime.securesms.conversation.ConversationIntents;
+import org.thoughtcrime.securesms.database.DatabaseFactory;
+import org.thoughtcrime.securesms.dependencies.ApplicationDependencies;
 import org.thoughtcrime.securesms.mms.DecryptableStreamUriLoader;
 import org.thoughtcrime.securesms.mms.GlideApp;
 import org.thoughtcrime.securesms.mms.Slide;
@@ -36,28 +42,32 @@ import org.thoughtcrime.securesms.preferences.widgets.NotificationPrivacyPrefere
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.util.AvatarUtil;
 import org.thoughtcrime.securesms.util.BitmapUtil;
+import org.thoughtcrime.securesms.util.BlurTransformation;
+import org.thoughtcrime.securesms.util.BubbleUtil;
 import org.thoughtcrime.securesms.util.ConversationUtil;
 import org.thoughtcrime.securesms.util.TextSecurePreferences;
 import org.thoughtcrime.securesms.util.Util;
 import org.whispersystems.libsignal.util.guava.Optional;
 
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 public class SingleRecipientNotificationBuilder extends AbstractNotificationBuilder {
 
-  private static final String TAG = SingleRecipientNotificationBuilder.class.getSimpleName();
+  private static final String TAG = Log.tag(SingleRecipientNotificationBuilder.class);
 
   private static final int BIG_PICTURE_DIMEN = 500;
   private static final int LARGE_ICON_DIMEN  = 250;
 
   private final List<NotificationCompat.MessagingStyle.Message> messages = new LinkedList<>();
 
-  private SlideDeck    slideDeck;
-  private CharSequence contentTitle;
-  private CharSequence contentText;
-  private Recipient threadRecipient;
+  private SlideDeck              slideDeck;
+  private CharSequence           contentTitle;
+  private CharSequence           contentText;
+  private Recipient              threadRecipient;
+  private BubbleUtil.BubbleState defaultBubbleState;
 
   public SingleRecipientNotificationBuilder(@NonNull Context context, @NonNull NotificationPrivacyPreference privacy)
   {
@@ -99,10 +109,16 @@ public class SingleRecipientNotificationBuilder extends AbstractNotificationBuil
 
     if (contactPhoto != null) {
       try {
+        List<Transformation<Bitmap>> transforms = new ArrayList<>();
+        if (recipient.shouldBlurAvatar()) {
+          transforms.add(new BlurTransformation(ApplicationDependencies.getApplication(), 0.25f, BlurTransformation.MAX_RADIUS));
+        }
+        transforms.add(new CircleCrop());
+
         return GlideApp.with(context.getApplicationContext())
                                     .load(contactPhoto)
                                     .diskCacheStrategy(DiskCacheStrategy.ALL)
-                                    .circleCrop()
+                                    .transform(new MultiTransformation<>(transforms))
                                     .submit(context.getResources().getDimensionPixelSize(android.R.dimen.notification_large_icon_width),
                                             context.getResources().getDimensionPixelSize(android.R.dimen.notification_large_icon_height))
                                     .get();
@@ -229,7 +245,8 @@ public class SingleRecipientNotificationBuilder extends AbstractNotificationBuil
   public void addMessageBody(@NonNull Recipient threadRecipient,
                              @NonNull Recipient individualRecipient,
                              @Nullable CharSequence messageBody,
-                             long timestamp)
+                             long timestamp,
+                             @Nullable SlideDeck slideDeck)
   {
     SpannableStringBuilder stringBuilder = new SpannableStringBuilder();
     Person.Builder personBuilder = new Person.Builder()
@@ -257,7 +274,26 @@ public class SingleRecipientNotificationBuilder extends AbstractNotificationBuil
       text = stringBuilder.append(context.getString(R.string.SingleRecipientNotificationBuilder_new_message));
     }
 
-    messages.add(new NotificationCompat.MessagingStyle.Message(text, timestamp, personBuilder.build()));
+    Uri    dataUri  = null;
+    String mimeType = null;
+
+    if (slideDeck != null && slideDeck.getThumbnailSlide() != null) {
+      Slide thumbnail = slideDeck.getThumbnailSlide();
+
+      if (Build.VERSION.SDK_INT >= 28) {
+        dataUri = thumbnail.getPublicUri();
+      } else {
+        dataUri  = thumbnail.getUri();
+      }
+
+      mimeType = thumbnail.getContentType();
+    }
+
+    messages.add(new NotificationCompat.MessagingStyle.Message(text, timestamp, personBuilder.build()).setData(mimeType, dataUri));
+  }
+
+  public void setDefaultBubbleState(@NonNull BubbleUtil.BubbleState bubbleState) {
+    this.defaultBubbleState = bubbleState;
   }
 
   @Override
@@ -270,13 +306,17 @@ public class SingleRecipientNotificationBuilder extends AbstractNotificationBuil
         setLargeIcon(getNotificationPicture(largeIconUri.get(), LARGE_ICON_DIMEN));
       }
 
-      if (messages.size() == 1 && bigPictureUri.isPresent()) {
+      if (messages.size() == 1 && bigPictureUri.isPresent() && Build.VERSION.SDK_INT < ConversationUtil.CONVERSATION_SUPPORT_VERSION) {
         setStyle(new NotificationCompat.BigPictureStyle()
                                        .bigPicture(getNotificationPicture(bigPictureUri.get(), BIG_PICTURE_DIMEN))
                                        .setSummaryText(getBigText()));
       } else {
         if (Build.VERSION.SDK_INT >= 24) {
           applyMessageStyle();
+
+          if (Build.VERSION.SDK_INT >= ConversationUtil.CONVERSATION_SUPPORT_VERSION) {
+            applyBubbleMetadata();
+          }
         } else {
           applyLegacy();
         }
@@ -302,6 +342,19 @@ public class SingleRecipientNotificationBuilder extends AbstractNotificationBuil
 
     Stream.of(messages).forEach(messagingStyle::addMessage);
     setStyle(messagingStyle);
+  }
+
+  private void applyBubbleMetadata() {
+    long                              threadId       = DatabaseFactory.getThreadDatabase(context).getThreadIdFor(threadRecipient);
+    PendingIntent                     intent         = PendingIntent.getActivity(context, 0, ConversationIntents.createBubbleIntent(context, threadRecipient.getId(), threadId), 0);
+    NotificationCompat.BubbleMetadata bubbleMetadata = new NotificationCompat.BubbleMetadata.Builder()
+                                                                                            .setAutoExpandBubble(defaultBubbleState == BubbleUtil.BubbleState.SHOWN)
+                                                                                            .setDesiredHeight(600)
+                                                                                            .setIcon(AvatarUtil.getIconCompatForShortcut(context, threadRecipient))
+                                                                                            .setSuppressNotification(defaultBubbleState == BubbleUtil.BubbleState.SHOWN)
+                                                                                            .setIntent(intent)
+                                                                                            .build();
+    setBubbleMetadata(bubbleMetadata);
   }
 
   private void applyLegacy() {

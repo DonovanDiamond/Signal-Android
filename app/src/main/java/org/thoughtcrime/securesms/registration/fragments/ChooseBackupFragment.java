@@ -17,9 +17,10 @@ import androidx.annotation.RequiresApi;
 import androidx.core.text.HtmlCompat;
 import androidx.navigation.Navigation;
 
+import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.R;
+import org.thoughtcrime.securesms.database.documents.Document;
 import org.thoughtcrime.securesms.keyvalue.SignalStore;
-import org.thoughtcrime.securesms.logging.Log;
 import org.thoughtcrime.securesms.util.BackupUtil;
 
 public class ChooseBackupFragment extends BaseRegistrationFragment {
@@ -41,17 +42,12 @@ public class ChooseBackupFragment extends BaseRegistrationFragment {
 
   @Override
   public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-    if (BackupUtil.isUserSelectionRequired(requireContext())) {
-      chooseBackupButton = view.findViewById(R.id.choose_backup_fragment_button);
-      chooseBackupButton.setOnClickListener(this::onChooseBackupSelected);
+    chooseBackupButton = view.findViewById(R.id.choose_backup_fragment_button);
+    chooseBackupButton.setOnClickListener(this::onChooseBackupSelected);
 
-      learnMore = view.findViewById(R.id.choose_backup_fragment_learn_more);
-      learnMore.setText(HtmlCompat.fromHtml(String.format("<a href=\"%s\">%s</a>", getString(R.string.backup_support_url), getString(R.string.ChooseBackupFragment__learn_more)), 0));
-      learnMore.setMovementMethod(LinkMovementMethod.getInstance());
-    } else {
-      Log.i(TAG, "User Selection is not required. Skipping.");
-      Navigation.findNavController(requireView()).navigate(ChooseBackupFragmentDirections.actionSkip());
-    }
+    learnMore = view.findViewById(R.id.choose_backup_fragment_learn_more);
+    learnMore.setText(HtmlCompat.fromHtml(String.format("<a href=\"%s\">%s</a>", getString(R.string.backup_support_url), getString(R.string.ChooseBackupFragment__learn_more)), 0));
+    learnMore.setMovementMethod(LinkMovementMethod.getInstance());
   }
 
   @Override
@@ -67,9 +63,11 @@ public class ChooseBackupFragment extends BaseRegistrationFragment {
 
   @RequiresApi(21)
   private void onChooseBackupSelected(@NonNull View view) {
-    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+    Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
 
     intent.setType("application/octet-stream");
+    intent.addCategory(Intent.CATEGORY_OPENABLE);
+    intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
 
     if (Build.VERSION.SDK_INT >= 26) {
       intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, SignalStore.settings().getLatestSignalBackupDirectory());
