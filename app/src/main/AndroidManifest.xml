@@ -308,6 +308,11 @@
               android:windowSoftInputMode="stateAlwaysHidden"
               android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"/>
 
+    <activity android:name=".recipients.ui.disappearingmessages.RecipientDisappearingMessagesActivity"
+              android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"
+              android:theme="@style/Signal.DayNight.NoActionBar"
+              android:windowSoftInputMode="adjustResize"/>
+
     <activity android:name=".DatabaseMigrationActivity"
               android:theme="@style/NoAnimation.Theme.AppCompat.Light.DarkActionBar"
               android:launchMode="singleTask"
@@ -358,8 +363,9 @@
     <activity android:name=".VerifyIdentityActivity"
               android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"/>
 
-    <activity android:name=".ApplicationPreferencesActivity"
+    <activity android:name=".components.settings.app.AppSettingsActivity"
               android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"
+              android:theme="@style/Signal.DayNight.NoActionBar"
               android:windowSoftInputMode="adjustResize">
         <intent-filter>
             <action android:name="android.intent.action.MAIN" />
@@ -576,6 +582,10 @@
               android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize|uiMode"
               android:launchMode="singleTask" />
 
+    <activity android:name=".ratelimit.RecaptchaProofActivity"
+              android:theme="@style/Theme.Signal.DayNight.NoActionBar"
+              android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize|uiMode" />
+
     <activity android:name=".wallpaper.crop.WallpaperImageSelectionActivity"
               android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"
               android:theme="@style/TextSecure.FullScreenMedia" />
@@ -584,6 +594,10 @@
               android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"
               android:screenOrientation="portrait"
               android:theme="@style/Theme.Signal.WallpaperCropper" />
+
+    <activity android:name=".reactions.edit.EditReactionsActivity"
+              android:theme="@style/Theme.Signal.DayNight.NoActionBar"
+              android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"/>
 
     <service android:enabled="true" android:name=".service.webrtc.WebRtcCallService"/>
     <service android:enabled="true" android:name=".service.ApplicationMigrationService"/>

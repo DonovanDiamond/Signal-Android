@@ -185,7 +185,8 @@ public class MmsDatabase extends MessageDatabase {
                                                                                   REMOTE_DELETED         + " INTEGER DEFAULT 0, " +
                                                                                   MENTIONS_SELF          + " INTEGER DEFAULT 0, " +
                                                                                   NOTIFIED_TIMESTAMP     + " INTEGER DEFAULT 0, " +
-                                                                                  VIEWED_RECEIPT_COUNT   + " INTEGER DEFAULT 0);";
+                                                                                  VIEWED_RECEIPT_COUNT   + " INTEGER DEFAULT 0, " +
+                                                                                  SERVER_GUID            + " TEXT DEFAULT NULL);";
 
   public static final String[] CREATE_INDEXS = {
     "CREATE INDEX IF NOT EXISTS mms_thread_id_index ON " + TABLE_NAME + " (" + THREAD_ID + ");",
@@ -620,6 +621,19 @@ public class MmsDatabase extends MessageDatabase {
   }
 
   @Override
+  public boolean hasMeaningfulMessage(long threadId) {
+    SQLiteDatabase db = databaseHelper.getReadableDatabase();
+
+    String[] cols  = new String[] { "1" };
+    String   query = THREAD_ID + " = ?";
+    String[] args  = SqlUtil.buildArgs(threadId);
+
+    try (Cursor cursor = db.query(TABLE_NAME, cols, query, args, null, null, null, "1")) {
+      return cursor != null && cursor.moveToFirst();
+    }
+  }
+
+  @Override
   public void addFailures(long messageId, List<NetworkFailure> failure) {
     try {
       addToDocument(messageId, NETWORK_FAILURE, failure, NetworkFailureList.class);
@@ -783,6 +797,30 @@ public class MmsDatabase extends MessageDatabase {
     long threadId = getThreadIdForMessage(messageId);
     updateMailboxBitmask(messageId, Types.PUSH_MESSAGE_BIT, Types.MESSAGE_FORCE_SMS_BIT, Optional.of(threadId));
     notifyConversationListeners(threadId);
+  }
+
+  @Override
+  public void markAsRateLimited(long messageId) {
+    long threadId = getThreadIdForMessage(messageId);
+    updateMailboxBitmask(messageId, 0, Types.MESSAGE_RATE_LIMITED_BIT, Optional.of(threadId));
+    notifyConversationListeners(threadId);
+  }
+
+  @Override
+  public void clearRateLimitStatus(@NonNull Collection<Long> ids) {
+    SQLiteDatabase db = databaseHelper.getWritableDatabase();
+
+    db.beginTransaction();
+    try {
+      for (long id : ids) {
+        long threadId = getThreadIdForMessage(id);
+        updateMailboxBitmask(id, Types.MESSAGE_RATE_LIMITED_BIT, 0, Optional.of(threadId));
+      }
+
+      db.setTransactionSuccessful();
+    } finally {
+      db.endTransaction();
+    }
   }
 
   @Override
@@ -1293,6 +1331,7 @@ public class MmsDatabase extends MessageDatabase {
     contentValues.put(VIEW_ONCE, retrieved.isViewOnce() ? 1 : 0);
     contentValues.put(READ, retrieved.isExpirationUpdate() ? 1 : 0);
     contentValues.put(UNIDENTIFIED, retrieved.isUnidentified());
+    contentValues.put(SERVER_GUID, retrieved.getServerGuid());
 
     if (!contentValues.containsKey(DATE_SENT)) {
       contentValues.put(DATE_SENT, contentValues.getAsLong(DATE_RECEIVED));
@@ -1706,6 +1745,22 @@ public class MmsDatabase extends MessageDatabase {
   @Override
   public List<MessageRecord> getProfileChangeDetailsRecords(long threadId, long afterTimestamp) {
     throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public Set<Long> getAllRateLimitedMessageIds() {
+    SQLiteDatabase db    = databaseHelper.getReadableDatabase();
+    String         where = "(" + MESSAGE_BOX + " & " + Types.TOTAL_MASK + " & " + Types.MESSAGE_RATE_LIMITED_BIT + ") > 0";
+
+    Set<Long> ids = new HashSet<>();
+
+    try (Cursor cursor = db.query(TABLE_NAME, new String[] { ID }, where, null, null, null, null)) {
+      while (cursor.moveToNext()) {
+        ids.add(CursorUtil.requireLong(cursor, ID));
+      }
+    }
+
+    return ids;
   }
 
   @Override

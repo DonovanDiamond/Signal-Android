@@ -31,6 +31,7 @@ import org.thoughtcrime.securesms.permissions.Permissions;
 import org.thoughtcrime.securesms.service.ExpiringMessageManager;
 import org.thoughtcrime.securesms.util.DateUtils;
 import org.thoughtcrime.securesms.util.FeatureFlags;
+import org.thoughtcrime.securesms.util.Projection;
 import org.thoughtcrime.securesms.util.ViewUtil;
 import org.thoughtcrime.securesms.util.dualsim.SubscriptionInfoCompat;
 import org.thoughtcrime.securesms.util.dualsim.SubscriptionManagerCompat;
@@ -146,6 +147,14 @@ public class ConversationItemFooter extends LinearLayout {
     setBackground(null);
   }
 
+  public @Nullable Projection getProjection() {
+    if (getVisibility() == VISIBLE) {
+      return Projection.relativeToViewRoot(this, new Projection.Corners(ViewUtil.dpToPx(11)));
+    } else {
+      return null;
+    }
+  }
+
   private void presentDate(@NonNull MessageRecord messageRecord, @NonNull Locale locale) {
     dateView.forceLayout();
     if (messageRecord.isFailed()) {
@@ -161,6 +170,8 @@ public class ConversationItemFooter extends LinearLayout {
       dateView.setText(errorMsg);
     } else if (messageRecord.isPendingInsecureSmsFallback()) {
       dateView.setText(R.string.ConversationItem_click_to_approve_unencrypted);
+    } else if (messageRecord.isRateLimited()) {
+      dateView.setText(R.string.ConversationItem_send_paused);
     } else {
       dateView.setText(DateUtils.getExtendedRelativeTimeSpanString(getContext(), locale, messageRecord.getTimestamp()));
     }

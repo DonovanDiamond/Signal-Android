@@ -60,6 +60,7 @@ import org.whispersystems.signalservice.api.push.exceptions.MissingConfiguration
 import org.whispersystems.signalservice.api.push.exceptions.NoContentException;
 import org.whispersystems.signalservice.api.push.exceptions.NonSuccessfulResponseCodeException;
 import org.whispersystems.signalservice.api.push.exceptions.NotFoundException;
+import org.whispersystems.signalservice.api.push.exceptions.ProofRequiredException;
 import org.whispersystems.signalservice.api.push.exceptions.PushNetworkException;
 import org.whispersystems.signalservice.api.push.exceptions.RangeException;
 import org.whispersystems.signalservice.api.push.exceptions.RateLimitException;
@@ -220,6 +221,11 @@ public class PushServiceSocket {
   private static final String GROUPSV2_TOKEN            = "/v1/groups/token";
 
   private static final String PAYMENTS_CONVERSIONS      = "/v1/payments/conversions";
+
+  private static final String SUBMIT_RATE_LIMIT_CHALLENGE       = "/v1/challenge";
+  private static final String REQUEST_RATE_LIMIT_PUSH_CHALLENGE = "/v1/challenge/push";
+
+  private static final String REPORT_SPAM = "/v1/messages/report/%s/%s";
 
   private static final String SERVER_DELIVERED_TIMESTAMP_HEADER = "X-Signal-Timestamp";
 
@@ -768,6 +774,20 @@ public class PushServiceSocket {
 
   public void deleteAccount() throws IOException {
     makeServiceRequest(DELETE_ACCOUNT_PATH, "DELETE", null);
+  }
+
+  public void requestRateLimitPushChallenge() throws IOException {
+    makeServiceRequest(REQUEST_RATE_LIMIT_PUSH_CHALLENGE, "POST", "");
+  }
+
+  public void submitRateLimitPushChallenge(String challenge) throws IOException {
+    String payload = JsonUtil.toJson(new SubmitPushChallengePayload(challenge));
+    makeServiceRequest(SUBMIT_RATE_LIMIT_CHALLENGE, "PUT", payload);
+  }
+
+  public void submitRateLimitRecaptchaChallenge(String challenge, String recaptchaToken) throws IOException {
+    String payload = JsonUtil.toJson(new SubmitRecaptchaChallengePayload(challenge, recaptchaToken));
+    makeServiceRequest(SUBMIT_RATE_LIMIT_CHALLENGE, "PUT", payload);
   }
 
   public List<ContactTokenDetails> retrieveDirectory(Set<String> contactTokens)
@@ -1468,6 +1488,13 @@ public class PushServiceSocket {
         throw new LockedException(accountLockFailure.length,
                                   accountLockFailure.timeRemaining,
                                   basicStorageCredentials);
+      case 428:
+        ProofRequiredResponse proofRequiredResponse = readResponseJson(response, ProofRequiredResponse.class);
+        String                retryAfterRaw = response.header("Retry-After");
+        long                  retryAfter    = Util.parseInt(retryAfterRaw, -1);
+
+        throw new ProofRequiredException(proofRequiredResponse, retryAfter);
+
       case 499:
         throw new DeprecatedVersionException();
 
@@ -1475,7 +1502,7 @@ public class PushServiceSocket {
         throw new ServerRejectedException();
     }
 
-    if (responseCode != 200 && responseCode != 204) {
+    if (responseCode != 200 && responseCode != 202 && responseCode != 204) {
       throw new NonSuccessfulResponseCodeException(responseCode, "Bad response: " + responseCode + " " + responseMessage);
     }
 
@@ -2161,6 +2188,12 @@ public class PushServiceSocket {
       Log.w(TAG, e);
       throw new MalformedResponseException("Unable to parse entity", e);
     }
+  }
+
+  public void reportSpam(String e164, String serverGuid)
+      throws NonSuccessfulResponseCodeException, MalformedResponseException, PushNetworkException
+  {
+    makeServiceRequest(String.format(REPORT_SPAM, e164, serverGuid), "POST", "");
   }
 
   public static final class GroupHistory {

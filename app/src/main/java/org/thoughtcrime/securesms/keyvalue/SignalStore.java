@@ -35,6 +35,8 @@ public final class SignalStore {
   private final WallpaperValues          wallpaperValues;
   private final PaymentsValues           paymentsValues;
   private final ProxyValues              proxyValues;
+  private final RateLimitValues          rateLimitValues;
+  private final ChatColorsValues         chatColorsValues;
 
   private SignalStore() {
     this.store                    = new KeyValueStore(ApplicationDependencies.getApplication());
@@ -55,6 +57,8 @@ public final class SignalStore {
     this.wallpaperValues          = new WallpaperValues(store);
     this.paymentsValues           = new PaymentsValues(store);
     this.proxyValues              = new ProxyValues(store);
+    this.rateLimitValues          = new RateLimitValues(store);
+    this.chatColorsValues         = new ChatColorsValues(store);
   }
 
   public static void onFirstEverAppLaunch() {
@@ -75,6 +79,8 @@ public final class SignalStore {
     wallpaper().onFirstEverAppLaunch();
     paymentsValues().onFirstEverAppLaunch();
     proxy().onFirstEverAppLaunch();
+    rateLimit().onFirstEverAppLaunch();
+    chatColorsValues().onFirstEverAppLaunch();
   }
 
   public static List<String> getKeysToIncludeInBackup() {
@@ -96,6 +102,8 @@ public final class SignalStore {
     keys.addAll(wallpaper().getKeysToIncludeInBackup());
     keys.addAll(paymentsValues().getKeysToIncludeInBackup());
     keys.addAll(proxy().getKeysToIncludeInBackup());
+    keys.addAll(rateLimit().getKeysToIncludeInBackup());
+    keys.addAll(chatColorsValues().getKeysToIncludeInBackup());
     return keys;
   }
 
@@ -174,6 +182,14 @@ public final class SignalStore {
 
   public static @NonNull ProxyValues proxy() {
     return INSTANCE.proxyValues;
+  }
+
+  public static @NonNull RateLimitValues rateLimit() {
+    return INSTANCE.rateLimitValues;
+  }
+
+  public static @NonNull ChatColorsValues chatColorsValues() {
+    return INSTANCE.chatColorsValues;
   }
 
   public static @NonNull GroupsV2AuthorizationSignalStoreCache groupsV2AuthorizationCache() {

@@ -16,6 +16,7 @@ import org.thoughtcrime.securesms.R
 import org.thoughtcrime.securesms.database.DatabaseFactory
 import org.thoughtcrime.securesms.database.MessageDatabase
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencies
+import org.thoughtcrime.securesms.keyvalue.SignalStore
 import org.thoughtcrime.securesms.messages.IncomingMessageObserver
 import org.thoughtcrime.securesms.notifications.DefaultMessageNotifier
 import org.thoughtcrime.securesms.notifications.MessageNotifier
@@ -27,7 +28,6 @@ import org.thoughtcrime.securesms.recipients.Recipient
 import org.thoughtcrime.securesms.service.KeyCachingService
 import org.thoughtcrime.securesms.util.BubbleUtil.BubbleState
 import org.thoughtcrime.securesms.util.ServiceUtil
-import org.thoughtcrime.securesms.util.TextSecurePreferences
 import org.thoughtcrime.securesms.webrtc.CallNotificationBuilder
 import org.whispersystems.signalservice.internal.util.Util
 import java.util.concurrent.ConcurrentHashMap
@@ -47,7 +47,8 @@ class MessageNotifierV2(context: Application) : MessageNotifier {
   @Volatile private var lastAudibleNotification: Long = -1
   @Volatile private var lastScheduledReminder: Long = 0
   @Volatile private var previousLockedStatus: Boolean = KeyCachingService.isLocked(context)
-  @Volatile private var previousPrivacyPreference: NotificationPrivacyPreference = TextSecurePreferences.getNotificationPrivacy(context)
+  @Volatile private var previousPrivacyPreference: NotificationPrivacyPreference = SignalStore.settings().messageNotificationsPrivacy
+  @Volatile private var previousState: NotificationStateV2 = NotificationStateV2.EMPTY
 
   private val threadReminders: MutableMap<Long, Reminder> = ConcurrentHashMap()
   private val stickyThreads: MutableMap<Long, StickyThread> = mutableMapOf()
@@ -73,6 +74,10 @@ class MessageNotifierV2(context: Application) : MessageNotifier {
 
   override fun notifyMessageDeliveryFailed(context: Context, recipient: Recipient, threadId: Long) {
     NotificationFactory.notifyMessageDeliveryFailed(context, recipient, threadId, visibleThread)
+  }
+
+  override fun notifyProofRequired(context: Context, recipient: Recipient, threadId: Long) {
+    NotificationFactory.notifyProofRequired(context, recipient, threadId, visibleThread)
   }
 
   override fun cancelDelayedNotifications() {
@@ -111,12 +116,12 @@ class MessageNotifierV2(context: Application) : MessageNotifier {
     reminderCount: Int,
     defaultBubbleState: BubbleState
   ) {
-    if (!TextSecurePreferences.isNotificationsEnabled(context)) {
+    if (!SignalStore.settings().isMessageNotificationsEnabled) {
       return
     }
 
     val currentLockStatus: Boolean = KeyCachingService.isLocked(context)
-    val currentPrivacyPreference: NotificationPrivacyPreference = TextSecurePreferences.getNotificationPrivacy(context)
+    val currentPrivacyPreference: NotificationPrivacyPreference = SignalStore.settings().messageNotificationsPrivacy
     val notificationConfigurationChanged: Boolean = currentLockStatus != previousLockedStatus || currentPrivacyPreference != previousPrivacyPreference
     previousLockedStatus = currentLockStatus
     previousPrivacyPreference = currentPrivacyPreference
@@ -167,9 +172,11 @@ class MessageNotifierV2(context: Application) : MessageNotifier {
       defaultBubbleState = defaultBubbleState,
       lastAudibleNotification = lastAudibleNotification,
       notificationConfigurationChanged = notificationConfigurationChanged,
-      alertOverrides = alertOverrides
+      alertOverrides = alertOverrides,
+      previousState = previousState
     )
 
+    previousState = state
     lastAudibleNotification = System.currentTimeMillis()
 
     updateReminderTimestamps(context, alertOverrides, threadsThatAlerted)
@@ -204,7 +211,7 @@ class MessageNotifierV2(context: Application) : MessageNotifier {
   }
 
   private fun updateReminderTimestamps(context: Context, alertOverrides: Set<Long>, threadsThatAlerted: Set<Long>) {
-    if (TextSecurePreferences.getRepeatAlertsCount(context) == 0) {
+    if (SignalStore.settings().messageNotificationsRepeatAlerts == 0) {
       return
     }
 
@@ -214,7 +221,7 @@ class MessageNotifierV2(context: Application) : MessageNotifier {
       val (id: Long, reminder: Reminder) = entry
       if (alertOverrides.contains(id)) {
         val notifyCount: Int = reminder.count + 1
-        if (notifyCount >= TextSecurePreferences.getRepeatAlertsCount(context)) {
+        if (notifyCount >= SignalStore.settings().messageNotificationsRepeatAlerts) {
           iterator.remove()
         } else {
           entry.setValue(Reminder(lastAudibleNotification, notifyCount))
@@ -281,7 +288,7 @@ private fun StatusBarNotification.isMessageNotification(): Boolean {
 }
 
 private fun NotificationManager.getDisplayedNotificationIds(): Result<Set<Int>> {
-  if (Build.VERSION.SDK_INT < 23) {
+  if (Build.VERSION.SDK_INT < 24) {
     return Result.failure(UnsupportedOperationException("SDK level too low"))
   }
 
@@ -294,7 +301,7 @@ private fun NotificationManager.getDisplayedNotificationIds(): Result<Set<Int>> 
 }
 
 private fun NotificationManager.cancelOrphanedNotifications(context: Context, state: NotificationStateV2, stickyNotifications: Set<Int>) {
-  if (Build.VERSION.SDK_INT < 23) {
+  if (Build.VERSION.SDK_INT < 24) {
     return
   }
 
